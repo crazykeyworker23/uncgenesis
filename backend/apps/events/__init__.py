@@ -1,0 +1,1 @@
+# apps/events app initialization

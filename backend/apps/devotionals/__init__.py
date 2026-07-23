@@ -1,0 +1,1 @@
+# apps/devotionals app initialization

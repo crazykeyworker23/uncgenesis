@@ -1,0 +1,115 @@
+# ==============================================================================
+# GÉNESIS APP - GLOBAL .GITIGNORE
+# ==============================================================================
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.project
+.classpath
+.settings/
+.project
+.metadata
+
+# Keep local environment files out of git
+.env
+.env.*
+!.env.example
+
+# ==============================================================================
+# BACKEND (Django + DRF)
+# ==============================================================================
+backend/__pycache__/
+backend/*.py[cod]
+backend/*$py.class
+backend/.Python
+backend/build/
+backend/develop-eggs/
+backend/dist/
+backend/downloads/
+backend/eggs/
+backend/.eggs/
+backend/lib/
+backend/lib64/
+backend/parts/
+backend/sdist/
+backend/var/
+backend/wheels/
+backend/pip-wheel-metadata/
+backend/share/python-wheels/
+backend/*.egg-info/
+backend/.installed.cfg
+backend/*.egg
+backend/MANIFEST
+backend/.ipynb_checkpoints
+backend/db.sqlite3
+backend/db.sqlite3-journal
+backend/media/
+backend/staticfiles/
+backend/htmlcov/
+backend/.tox/
+backend/.nosenv/
+backend/.pytest_cache/
+backend/.cache/
+backend/vstudiodebug/
+backend/.mypy_cache/
+backend/.pyre/
+backend/.pytype/
+backend/celerybeat-schedule
+backend/celerybeat.pid
+
+# ==============================================================================
+# FRONTEND ADMIN (React + Vite)
+# ==============================================================================
+frontend-admin/node_modules/
+frontend-admin/dist/
+frontend-admin/dist-ssr/
+frontend-admin/*.local
+frontend-admin/npm-debug.log*
+frontend-admin/yarn-debug.log*
+frontend-admin/yarn-error.log*
+frontend-admin/pnpm-debug.log*
+frontend-admin/.svelte-kit/
+frontend-admin/.nuxt/
+frontend-admin/.next/
+
+# ==============================================================================
+# MOBILE APP (Flutter)
+# ==============================================================================
+mobile-app/.dart_tool/
+mobile-app/.flutter-plugins
+mobile-app/.flutter-plugins-dependencies
+mobile-app/.packages
+mobile-app/.pub-cache/
+mobile-app/.pub/
+mobile-app/build/
+mobile-app/ios/.symlinks/
+mobile-app/ios/Pods/
+mobile-app/ios/Podfile.lock
+mobile-app/android/.gradle/
+mobile-app/android/local.properties
+mobile-app/android/app/src/main/res/values/google-services.json
+mobile-app/ios/Runner/GoogleService-Info.plist
+mobile-app/assets/images/temp/
+mobile-app/*.lock
+mobile-app/pubspec.lock.backup
+
+# Backup and temp files
+*~
+*.bak
+*.swp
+*.tmp

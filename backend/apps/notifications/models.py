@@ -1,0 +1,86 @@
+from django.db import models
+from django.conf import settings
+
+class DeviceType(models.TextChoices):
+    ANDROID = 'ANDROID', 'Android'
+    IOS = 'IOS', 'iOS'
+    WEB = 'WEB', 'Web'
+
+
+class FCMDevice(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='fcm_devices'
+    )
+    token = models.TextField(unique=True)
+    device_type = models.CharField(
+        max_length=20,
+        choices=DeviceType.choices,
+        default=DeviceType.ANDROID
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'dispositivo FCM'
+        verbose_name_plural = 'dispositivos FCM'
+
+    def __str__(self):
+        owner = self.user.email if self.user else "Invitado"
+        return f"{owner} - {self.device_type} ({self.token[:20]}...)"
+
+
+class NotificationStatus(models.TextChoices):
+    PENDING = 'PENDING', 'Pendiente'
+    SENT = 'SENT', 'Enviado'
+    FAILED = 'FAILED', 'Fallido'
+
+
+class TargetAudience(models.TextChoices):
+    ALL = 'ALL', 'Todos'
+    LEADERS = 'LEADERS', 'Líderes de Célula'
+    MEMBERS = 'MEMBERS', 'Miembros Registrados'
+    USER = 'USER', 'Usuario Específico'
+
+
+class Notification(models.Model):
+    title = models.CharField(max_length=150)
+    body = models.TextField()
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='sent_notifications'
+    )
+    target_audience = models.CharField(
+        max_length=20,
+        choices=TargetAudience.choices,
+        default=TargetAudience.ALL
+    )
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='received_notifications'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=NotificationStatus.choices,
+        default=NotificationStatus.PENDING
+    )
+    scheduled_for = models.DateTimeField(null=True, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'notificación'
+        verbose_name_plural = 'notificaciones'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.title} ({self.get_status_display()})"

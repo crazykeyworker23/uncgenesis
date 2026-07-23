@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans bg-deep-teal text-crema antialiased selection:bg-dorado selection:text-deep-teal;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(4, 59, 59, 0.5) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(5, 44, 46, 0.8) 0px, transparent 50%);
+    background-attachment: fixed;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-deep-teal;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-genesis-card-sec rounded-full border-2 border-deep-teal hover:bg-dorado transition-colors duration-300;
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  @apply bg-genesis-card bg-opacity-40 backdrop-blur-xl border border-white border-opacity-10 shadow-glass rounded-2xl;
+}
+
+.glass-panel-hover {
+  @apply hover:bg-opacity-50 hover:border-opacity-20 transition-all duration-300;
+}
+
+.glass-input {
+  @apply bg-dark-teal bg-opacity-50 border border-white border-opacity-10 rounded-xl px-4 py-3 text-crema placeholder-crema placeholder-opacity-40 focus:outline-none focus:border-dorado focus:ring-1 focus:ring-dorado transition-all duration-300;
+}
+
+.btn-primary {
+  @apply bg-dorado hover:bg-dorado-light text-deep-teal font-semibold rounded-xl px-6 py-3 shadow-md hover:shadow-dorado/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:pointer-events-none;
+}
+
+.btn-secondary {
+  @apply bg-genesis-card-sec hover:bg-opacity-80 text-crema font-semibold rounded-xl px-6 py-3 border border-white border-opacity-10 hover:border-dorado/40 transition-all duration-200;
+}
+
+/* Premium Animations */
+@keyframes pulse-gold {
+  0%, 100% {
+    opacity: 0.6;
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 25px rgba(212, 175, 55, 0.8);
+  }
+}
+
+.glowing-gold {
+  animation: pulse-gold 3s infinite ease-in-out;
+}
