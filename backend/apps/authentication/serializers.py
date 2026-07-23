@@ -10,33 +10,44 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        token['email'] = user.email
-        token['full_name'] = user.full_name
-        token['status'] = user.status
+        token['email'] = getattr(user, 'email', '')
+        token['full_name'] = getattr(user, 'full_name', '') or ''
+        token['status'] = getattr(user, 'status', 'ACTIVE')
         return token
 
     def validate(self, attrs):
+        username_val = attrs.get('username') or attrs.get('email')
+        if username_val:
+            attrs['username'] = username_val
+            attrs['email'] = username_val
+
         data = super().validate(attrs)
         user = self.user
         
-        # Check active status manually just in case
-        if user.status != 'ACTIVE':
+        if getattr(user, 'status', 'ACTIVE') != 'ACTIVE':
             raise serializers.ValidationError(
                 "Este usuario no se encuentra activo.",
                 code='authorization'
             )
 
+        avatar_url = None
+        try:
+            if getattr(user, 'avatar', None):
+                avatar_url = user.avatar.url
+        except Exception:
+            avatar_url = None
+
         data['user'] = {
             'id': user.id,
-            'email': user.email,
-            'full_name': user.full_name,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-            'phone': user.phone,
-            'location': user.location,
-            'bio': user.bio,
-            'status': user.status,
-            'avatar': user.avatar.url if user.avatar else None,
+            'email': getattr(user, 'email', ''),
+            'full_name': getattr(user, 'full_name', '') or '',
+            'first_name': getattr(user, 'first_name', '') or '',
+            'last_name': getattr(user, 'last_name', '') or '',
+            'phone': getattr(user, 'phone', '') or '',
+            'location': getattr(user, 'location', '') or '',
+            'bio': getattr(user, 'bio', '') or '',
+            'status': getattr(user, 'status', 'ACTIVE'),
+            'avatar': avatar_url,
         }
         return data
 
