@@ -11,6 +11,56 @@ from apps.roles.permissions import HasAppPermission
 from apps.audit.services import log_action
 
 
+def schedule_devotional_notification(devotional, sender):
+    """
+    Crea o actualiza una notificación push programada para las 7:00 AM del día del devocional.
+    """
+    try:
+        from apps.notifications.models import Notification, NotificationStatus, TargetAudience
+        from apps.notifications.tasks import send_push_notification_task
+        import datetime
+
+        if devotional.status != DevotionalStatus.PUBLISHED:
+            return
+
+        target_date = devotional.date
+        scheduled_dt = timezone.make_aware(
+            datetime.datetime.combine(target_date, datetime.time(7, 0, 0)),
+            timezone.get_current_timezone()
+        )
+
+        is_future = scheduled_dt > timezone.now()
+        status_val = NotificationStatus.PENDING if is_future else NotificationStatus.SENT
+        sent_val = None if is_future else timezone.now()
+
+        title = f"📖 Devocional del Día: {devotional.title}"
+        clean_content = devotional.content.replace('\n', ' ').strip()
+        snippet = (clean_content[:100] + '...') if len(clean_content) > 100 else clean_content
+        body = f"{devotional.bible_passage} — {snippet}"
+
+        notif, created = Notification.objects.update_or_create(
+            title__startswith=f"📖 Devocional del Día: {devotional.title[:25]}",
+            defaults={
+                'title': title,
+                'body': body,
+                'sender': sender,
+                'target_audience': TargetAudience.ALL,
+                'target_user': None,
+                'scheduled_for': scheduled_dt,
+                'status': status_val,
+                'sent_at': sent_val,
+            }
+        )
+
+        if is_future:
+            try:
+                send_push_notification_task.apply_async((notif.id,), eta=scheduled_dt)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
 class DevotionalViewSet(viewsets.ModelViewSet):
     queryset = Devotional.objects.all()
     serializer_class = DevotionalSerializer
@@ -65,6 +115,7 @@ class DevotionalViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         devotional = serializer.save()
+        schedule_devotional_notification(devotional, self.request.user)
         log_action(
             user=self.request.user,
             action="CREATE",
@@ -76,6 +127,7 @@ class DevotionalViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         devotional = serializer.save()
+        schedule_devotional_notification(devotional, self.request.user)
         log_action(
             user=self.request.user,
             action="EDIT",
@@ -138,6 +190,8 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         devotional = self.get_object()
         devotional.status = DevotionalStatus.PUBLISHED
         devotional.save()
+        
+        schedule_devotional_notification(devotional, request.user)
         
         log_action(
             user=request.user,
