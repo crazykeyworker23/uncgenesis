@@ -106,6 +106,33 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
     await _saveToPrefs(updated);
   }
 
+  Future<void> fetchRemoteNotifications(dynamic dio) async {
+    try {
+      final response = await dio.get('/notifications/');
+      final results = response.data['results'] ?? response.data;
+      if (results is List) {
+        final List<LocalNotification> fetched = [];
+        for (final item in results) {
+          final title = item['title'] ?? 'Notificación Génesis';
+          final body = item['body'] ?? '';
+          final id = item['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString();
+          final created = item['created_at'] ?? DateTime.now().toIso8601String();
+          fetched.add(LocalNotification(
+            id: id,
+            title: title,
+            body: body,
+            receivedAt: created,
+            isRead: false,
+          ));
+        }
+        if (fetched.isNotEmpty) {
+          state = fetched;
+          await _saveToPrefs(fetched);
+        }
+      }
+    } catch (_) {}
+  }
+
   Future<void> clearAll() async {
     state = [];
     final prefs = await SharedPreferences.getInstance();

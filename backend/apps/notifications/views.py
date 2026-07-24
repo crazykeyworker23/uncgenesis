@@ -39,6 +39,11 @@ class NotificationViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'scheduled_for', 'sent_at']
     ordering = ['-created_at']
 
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAuthenticated(), HasAppPermission()]
+
     def get_required_permission(self):
         return PERM_MAP.get(self.action, 'NOTIFICATIONS_VIEW')
 

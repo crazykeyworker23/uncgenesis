@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/providers/core_providers.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../providers/notifications_provider.dart';
@@ -11,6 +12,11 @@ class NotificationsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifications = ref.watch(localNotificationsProvider);
+    final apiClient = ref.watch(apiClientProvider);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(localNotificationsProvider.notifier).fetchRemoteNotifications(apiClient.dio);
+    });
 
     return Scaffold(
       appBar: AppBar(
