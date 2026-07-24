@@ -139,11 +139,10 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
           // Ignorar notificaciones eliminadas por el usuario
           if (deletedIds.contains(id)) continue;
 
-          final targetAudience = item['target_audience']?.toString();
           final targetUser = item['target_user']?.toString();
 
-          // VALIDACIÓN ESTRICTA EN EL CLIENTE: Si la notificación es personal para otro ID de usuario -> DESCARTAR
-          if (targetAudience == 'USER' && targetUser != null && currentUserId != null) {
+          // VALIDACIÓN ABSOLUTA EN CLIENTE (QA): Si la notificación tiene target_user asignado y NO es para el usuario actual -> DESCARTAR
+          if (targetUser != null && targetUser.isNotEmpty && currentUserId != null) {
             if (targetUser != currentUserId) {
               continue;
             }

@@ -51,19 +51,22 @@ class NotificationViewSet(viewsets.ModelViewSet):
         if user.is_superuser and self.request.query_params.get('admin_view') == 'true':
             return qs.all()
 
-        # Para el feed de la App Movil (incluso para el superusuario / admin en su telefono):
+        # Para el feed de la App Movil:
         from django.db.models import Q
         from apps.roles.models import UserRole, RoleType
 
         user_roles = set(UserRole.objects.filter(user=user).values_list('role__name', flat=True))
 
-        query = Q(target_audience='ALL')
-        query |= Q(target_audience='USER', target_user=user)
+        # Regla Absoluta de Seguridad QA:
+        # 1. Si la notificacion tiene un target_user especificado -> SOLO es visible para ese target_user
+        # 2. Si no tiene target_user -> Se evalua la audiencia masiva (ALL, LEADERS, MEMBERS)
+        query = Q(target_user=user)
+        query |= Q(target_audience='ALL', target_user__isnull=True)
 
         if user.is_superuser or RoleType.CELL_LEADER in user_roles:
-            query |= Q(target_audience='LEADERS')
+            query |= Q(target_audience='LEADERS', target_user__isnull=True)
         if user.is_superuser or RoleType.MEMBER in user_roles:
-            query |= Q(target_audience='MEMBERS')
+            query |= Q(target_audience='MEMBERS', target_user__isnull=True)
 
         return qs.filter(query, status='SENT').distinct()
 
