@@ -76,84 +76,102 @@ class NotificationsPage extends ConsumerWidget {
                   }
                 }
 
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  color: notif.isRead ? const Color(0xFF1E293B) : const Color(0xFF0F172A),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      ref.read(localNotificationsProvider.notifier).markAsRead(notif.id);
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: notif.isRead 
-                                  ? const Color(0xFF0D9488).withOpacity(0.4) 
-                                  : const Color(0xFF0D9488),
-                              shape: BoxShape.circle,
+                return Dismissible(
+                  key: Key(notif.id),
+                  direction: DismissDirection.endToStart,
+                  onDismissed: (_) {
+                    ref.read(localNotificationsProvider.notifier).deleteNotification(notif.id);
+                  },
+                  background: Container(
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.error.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.delete_outline, color: Colors.white, size: 24),
+                  ),
+                  child: Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    color: notif.isRead ? const Color(0xFF1E293B) : const Color(0xFF0F172A),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        ref.read(localNotificationsProvider.notifier).markAsRead(notif.id);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: notif.isRead 
+                                    ? const Color(0xFF0D9488).withOpacity(0.4) 
+                                    : const Color(0xFF0D9488),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                notif.isRead ? Icons.notifications_none : Icons.notifications_active,
+                                color: notif.isRead ? Colors.white60 : const Color(0xFFD4AF37),
+                                size: 20,
+                              ),
                             ),
-                            child: Icon(
-                              notif.isRead ? Icons.notifications_none : Icons.notifications_active,
-                              color: notif.isRead ? Colors.white60 : const Color(0xFFD4AF37),
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        notif.title,
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 15,
-                                          fontWeight: notif.isRead ? FontWeight.normal : FontWeight.bold,
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          notif.title,
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight: notif.isRead ? FontWeight.normal : FontWeight.bold,
+                                          ),
                                         ),
                                       ),
+                                      GestureDetector(
+                                        onTap: () {
+                                          ref.read(localNotificationsProvider.notifier).deleteNotification(notif.id);
+                                        },
+                                        child: Icon(
+                                          Icons.close,
+                                          size: 18,
+                                          color: Colors.white.withOpacity(0.4),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    notif.body,
+                                    style: TextStyle(
+                                      color: notif.isRead ? Colors.white70 : Colors.white,
+                                      fontSize: 13,
+                                      height: 1.3,
                                     ),
-                                    if (!notif.isRead)
-                                      Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: const BoxDecoration(
-                                          color: Color(0xFFD4AF37),
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  notif.body,
-                                  style: TextStyle(
-                                    color: notif.isRead ? Colors.white70 : Colors.white,
-                                    fontSize: 13,
-                                    height: 1.3,
                                   ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  timeOnly.isNotEmpty ? '$dateOnly - $timeOnly' : dateOnly,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.white38,
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    timeOnly.isNotEmpty ? '$dateOnly - $timeOnly' : dateOnly,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.white38,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),

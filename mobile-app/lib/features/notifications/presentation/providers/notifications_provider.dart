@@ -98,6 +98,9 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
 
   Future<void> fetchRemoteNotifications(dynamic dio) async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final deletedIds = (prefs.getStringList('deleted_notification_ids') ?? []).toSet();
+
       final response = await dio.get('/notifications/');
       final results = response.data['results'] ?? response.data;
       if (results is List) {
@@ -107,9 +110,13 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
         LocalNotification? newestNotification;
 
         for (final item in results) {
+          final id = item['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString();
+          
+          // Ignorar notificaciones eliminadas por el usuario
+          if (deletedIds.contains(id)) continue;
+
           final title = item['title'] ?? 'Notificación Génesis';
           final body = item['body'] ?? '';
-          final id = item['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString();
           final created = item['created_at'] ?? DateTime.now().toIso8601String();
           
           final notif = LocalNotification(
@@ -152,38 +159,25 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
     } catch (_) {}
   }
 
-  Future<void> addNotification(String title, String body) async {
-    final newNotif = LocalNotification(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: title,
-      body: body,
-      receivedAt: DateTime.now().toIso8601String(),
-    );
-    final updated = [newNotif, ...state];
-    state = updated;
-    await _saveToPrefs(updated);
-  }
+  Future<void> deleteNotification(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final deletedIds = (prefs.getStringList('deleted_notification_ids') ?? []).toSet();
+    deletedIds.add(id);
+    await prefs.setStringList('deleted_notification_ids', deletedIds.toList());
 
-  Future<void> markAsRead(String id) async {
-    final updated = state.map((item) {
-      if (item.id == id) {
-        return item.copyWith(isRead: true);
-      }
-      return item;
-    }).toList();
-    state = updated;
-    await _saveToPrefs(updated);
-  }
-
-  Future<void> markAllAsRead() async {
-    final updated = state.map((item) => item.copyWith(isRead: true)).toList();
+    final updated = state.where((item) => item.id != id).toList();
     state = updated;
     await _saveToPrefs(updated);
   }
 
   Future<void> clearAll() async {
-    state = [];
     final prefs = await SharedPreferences.getInstance();
+    final currentIds = state.map((n) => n.id).toList();
+    final deletedIds = (prefs.getStringList('deleted_notification_ids') ?? []).toSet();
+    deletedIds.addAll(currentIds);
+    await prefs.setStringList('deleted_notification_ids', deletedIds.toList());
+
+    state = [];
     await prefs.remove(_key);
   }
 }
