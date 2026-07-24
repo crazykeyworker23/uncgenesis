@@ -10,13 +10,13 @@ class ApiClient {
   bool _isRefreshing = false;
   Completer<String?>? _refreshCompleter;
 
-  static String _resolvedBaseUrl = 'http://192.168.1.183:8000/api/v1';
+  static String _resolvedBaseUrl = 'http://72.61.48.152:8080/api/v1';
 
   static String get baseUrl {
     const envUrl = String.fromEnvironment('API_BASE_URL');
     if (envUrl.isNotEmpty) return envUrl;
     
-    if (kIsWeb) return 'http://127.0.0.1:8000/api/v1';
+    if (kIsWeb) return 'http://72.61.48.152:8080/api/v1';
     
     return _resolvedBaseUrl;
   }
