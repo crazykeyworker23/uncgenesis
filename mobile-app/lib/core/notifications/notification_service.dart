@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../network/api_client.dart';
 import '../widgets/in_app_notification_banner.dart';
 
@@ -38,6 +39,7 @@ class NotificationService {
 
   ApiClient? _apiClient;
   GlobalKey<NavigatorState>? _navigatorKey;
+  final FlutterLocalNotificationsPlugin _localNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
   static GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -51,6 +53,38 @@ class NotificationService {
     }
   }
 
+  Future<void> initLocalNotifications() async {
+    try {
+      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const initSettings = InitializationSettings(android: androidSettings);
+      await _localNotificationsPlugin.initialize(initSettings);
+    } catch (e) {
+      debugPrint("initLocalNotifications error: $e");
+    }
+  }
+
+  Future<void> showSystemNotification(String title, String body) async {
+    try {
+      const androidDetails = AndroidNotificationDetails(
+        'genesis_channel',
+        'Notificaciones Génesis',
+        channelDescription: 'Canal de notificaciones de Génesis App',
+        importance: Importance.max,
+        priority: Priority.high,
+        showWhen: true,
+      );
+      const notificationDetails = NotificationDetails(android: androidDetails);
+      await _localNotificationsPlugin.show(
+        DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        title,
+        body,
+        notificationDetails,
+      );
+    } catch (e) {
+      debugPrint('Local notification show error: $e');
+    }
+  }
+
   Future<void> initialize({
     required ApiClient apiClient,
     GlobalKey<NavigatorState>? navKey,
@@ -61,6 +95,8 @@ class NotificationService {
     } else {
       _navigatorKey = navigatorKey;
     }
+
+    await initLocalNotifications();
 
     try {
       // 1. Ensure Firebase Core is initialized safely

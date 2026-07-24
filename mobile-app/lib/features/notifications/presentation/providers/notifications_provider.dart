@@ -131,8 +131,13 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
           state = fetched;
           await _saveToPrefs(fetched);
 
-          // If a brand new notification arrived, show in-app banner immediately
+          // If a brand new notification arrived, show in-app banner AND system status bar notification
           if (hasNew && newestNotification != null) {
+            NotificationService().showSystemNotification(
+              newestNotification.title,
+              newestNotification.body,
+            );
+
             final navState = NotificationService.navigatorKey.currentState;
             final context = navState?.context;
             if (context != null) {
