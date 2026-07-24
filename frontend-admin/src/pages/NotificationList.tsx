@@ -82,6 +82,34 @@ const NotificationDetail: React.FC<NotificationDetailProps> = ({
 
           <hr className="border-gray-800" />
 
+          {/* Recipient Details Card */}
+          <div className="bg-gray-950/40 p-4 rounded-xl border border-white/5 space-y-2">
+            <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-dorado" />
+              Destinatario Registrado
+            </p>
+            {item.target_audience === 'USER' && item.target_user_detail ? (
+              <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-lg">
+                <p className="text-sm font-bold text-amber-300">
+                  {item.target_user_detail.full_name || `${item.target_user_detail.first_name} ${item.target_user_detail.last_name}`}
+                </p>
+                <p className="text-xs text-amber-200/70 mt-0.5">{item.target_user_detail.email}</p>
+                <p className="text-[10px] text-dorado uppercase tracking-wide font-extrabold mt-2">
+                  Mensaje Personal (Individual)
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 bg-teal-950/30 border border-teal-500/30 rounded-lg">
+                <p className="text-sm font-bold text-teal-300">
+                  {TARGET_AUDIENCE_LABELS[item.target_audience] || 'Todos los dispositivos'}
+                </p>
+                <p className="text-[10px] text-teal-400 uppercase tracking-wide font-extrabold mt-1">
+                  Mensaje Masivo (Iglesia)
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Tracking Details */}
           <div className="grid grid-cols-2 gap-4 text-xs text-gray-400">
             <div className="bg-gray-950/20 p-3 rounded-lg border border-white/5">
@@ -353,11 +381,21 @@ export const NotificationList: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold bg-teal-900 bg-opacity-30 text-teal-300 border border-teal-800 border-opacity-35">
-                          {item.target_audience === 'USER' && item.target_user_detail
-                            ? `Para: ${item.target_user_detail.full_name || item.target_user_detail.email}`
-                            : TARGET_AUDIENCE_LABELS[item.target_audience]}
-                        </span>
+                        {item.target_audience === 'USER' ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-amber-950/40 text-amber-300 border border-amber-500/40 shadow-sm">
+                            <Users className="w-3.5 h-3.5 text-dorado shrink-0" />
+                            <span>
+                              {item.target_user_detail
+                                ? `Para: ${item.target_user_detail.full_name || item.target_user_detail.first_name || 'Usuario'} (${item.target_user_detail.email})`
+                                : `Para ID: ${item.target_user ?? 'Específico'}`}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-teal-900/30 text-teal-300 border border-teal-800/35">
+                            <Users className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                            <span>{TARGET_AUDIENCE_LABELS[item.target_audience] || 'Todos'}</span>
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-center">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${cfg.classes}`}>
