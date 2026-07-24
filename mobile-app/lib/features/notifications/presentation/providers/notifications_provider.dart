@@ -159,6 +159,23 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
     } catch (_) {}
   }
 
+  Future<void> markAsRead(String id) async {
+    final updated = state.map((item) {
+      if (item.id == id) {
+        return item.copyWith(isRead: true);
+      }
+      return item;
+    }).toList();
+    state = updated;
+    await _saveToPrefs(updated);
+  }
+
+  Future<void> markAllAsRead() async {
+    final updated = state.map((item) => item.copyWith(isRead: true)).toList();
+    state = updated;
+    await _saveToPrefs(updated);
+  }
+
   Future<void> deleteNotification(String id) async {
     final prefs = await SharedPreferences.getInstance();
     final deletedIds = (prefs.getStringList('deleted_notification_ids') ?? []).toSet();
