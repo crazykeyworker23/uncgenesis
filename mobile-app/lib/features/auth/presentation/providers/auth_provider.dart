@@ -143,7 +143,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return e.toString();
   }
 
-  void loginAsGuest() {
+  Future<void> loginAsGuest() async {
+    await _storage.delete(key: 'access_token');
+    await _storage.delete(key: 'refresh_token');
     state = const AuthState.guest();
   }
 

@@ -83,16 +83,20 @@ class NotificationViewSet(viewsets.ModelViewSet):
         super().check_permissions(request)
 
     def perform_create(self, serializer):
-        notification = serializer.save(sender=self.request.user, status=NotificationStatus.PENDING)
+        scheduled = serializer.validated_data.get('scheduled_for')
+        is_immediate = not scheduled or scheduled <= timezone.now()
         
-        scheduled = notification.scheduled_for
-        if scheduled and scheduled > timezone.now():
+        initial_status = NotificationStatus.SENT if is_immediate else NotificationStatus.PENDING
+        sent_time = timezone.now() if is_immediate else None
+
+        notification = serializer.save(
+            sender=self.request.user,
+            status=initial_status,
+            sent_at=sent_time
+        )
+        
+        if not is_immediate:
             send_push_notification_task.apply_async((notification.id,), eta=scheduled)
-        else:
-            try:
-                send_push_notification_task.delay(notification.id)
-            except Exception:
-                send_push_notification_task(notification.id)
 
     @action(detail=True, methods=['post'], url_path='send-now')
     def send_now(self, request, pk=None):
