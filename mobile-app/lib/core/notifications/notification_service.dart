@@ -55,7 +55,7 @@ class NotificationService {
 
   Future<void> initLocalNotifications() async {
     try {
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidSettings = AndroidInitializationSettings('@drawable/ic_notification');
       const initSettings = InitializationSettings(android: androidSettings);
       await _localNotificationsPlugin.initialize(initSettings);
     } catch (e) {
@@ -72,6 +72,7 @@ class NotificationService {
         importance: Importance.max,
         priority: Priority.high,
         showWhen: true,
+        icon: '@drawable/ic_notification',
       );
       const notificationDetails = NotificationDetails(android: androidDetails);
       await _localNotificationsPlugin.show(
