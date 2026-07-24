@@ -20,18 +20,12 @@ class Command(BaseCommand):
 
         # 1. Crear Roles si no existen
         roles_dict = {}
-        for r_type, r_name in [
-            (RoleType.SUPERADMIN, 'Super Administrador'),
-            (RoleType.ADMIN, 'Administrador'),
-            (RoleType.PASTOR, 'Pastor principal / Liderazgo'),
-            (RoleType.LEADER, 'Líder de Célula'),
-            (RoleType.MEMBER, 'Miembro de la Comunidad'),
-        ]:
+        for r_type in RoleType:
             role_obj, _ = Role.objects.get_or_create(
-                name=r_type,
-                defaults={'description': r_name}
+                name=r_type.value,
+                defaults={'description': r_type.label}
             )
-            roles_dict[r_type] = role_obj
+            roles_dict[r_type.value] = role_obj
 
         # 2. Crear Usuarios Clave
         admin_user, _ = User.objects.get_or_create(
@@ -50,7 +44,7 @@ class Command(BaseCommand):
         admin_user.save()
         UserRole.objects.get_or_create(user=admin_user, role=roles_dict[RoleType.SUPERADMIN])
 
-        pastor_user, _ = User.objects.get_or_create(
+        editor_user, _ = User.objects.get_or_create(
             email='pastor@iglesia.org',
             defaults={
                 'first_name': 'Juan',
@@ -63,9 +57,9 @@ class Command(BaseCommand):
                 'is_staff': True,
             }
         )
-        pastor_user.set_password('pastor123')
-        pastor_user.save()
-        UserRole.objects.get_or_create(user=pastor_user, role=roles_dict[RoleType.PASTOR])
+        editor_user.set_password('pastor123')
+        editor_user.save()
+        UserRole.objects.get_or_create(user=editor_user, role=roles_dict[RoleType.CONTENT_EDITOR])
 
         lider1, _ = User.objects.get_or_create(
             email='lider.carlos@iglesia.org',
@@ -80,7 +74,7 @@ class Command(BaseCommand):
         )
         lider1.set_password('lider123')
         lider1.save()
-        UserRole.objects.get_or_create(user=lider1, role=roles_dict[RoleType.LEADER])
+        UserRole.objects.get_or_create(user=lider1, role=roles_dict[RoleType.CELL_LEADER])
 
         lider2, _ = User.objects.get_or_create(
             email='lider.maria@iglesia.org',
@@ -95,7 +89,7 @@ class Command(BaseCommand):
         )
         lider2.set_password('lider123')
         lider2.save()
-        UserRole.objects.get_or_create(user=lider2, role=roles_dict[RoleType.LEADER])
+        UserRole.objects.get_or_create(user=lider2, role=roles_dict[RoleType.CELL_LEADER])
 
         self.stdout.write(self.style.SUCCESS('✓ Usuarios y roles creados correctamente.'))
 
@@ -139,7 +133,7 @@ class Command(BaseCommand):
                 'bible_passage': 'Josué 1:9',
                 'bible_text': 'Mira que te mando que te esfuerces y seas valiente; no temas ni desmayes, porque Jehová tu Dios estará contigo en dondequiera que vayas.',
                 'content': 'En cada etapa de nuestra vida enfrentamos desafíos que pueden hacernos dudar. Sin embargo, la promesa divina nos recuerda que no caminamos solos. La verdadera valentía no es la ausencia de miedo, sino la certeza de la presencia de Dios en cada paso.',
-                'author': pastor_user,
+                'author': editor_user,
                 'status': DevotionalStatus.PUBLISHED,
             }
         )
@@ -151,7 +145,7 @@ class Command(BaseCommand):
                 'bible_passage': 'Filipenses 4:6-7',
                 'bible_text': 'Por nada estéis afanosos, sino sean conocidas vuestras peticiones delante de Dios en toda oración y ruego, con acción de gracias.',
                 'content': 'La paz de Dios sobrepasa todo entendimiento humano. Cuando entregamos nuestras preocupaciones en oración sincera, abrimos nuestro corazón a la tranquilidad celestial.',
-                'author': pastor_user,
+                'author': editor_user,
                 'status': DevotionalStatus.PUBLISHED,
             }
         )
@@ -205,7 +199,7 @@ class Command(BaseCommand):
                 'content': 'Estamos emocionados de presentar la versión web y móvil de Génesis App. A través de este portal podrás acceder a devocionales diarios, inscribirte en eventos, ubicar tu célula más cercana y enviar peticiones de oración.',
                 'category': cat_noticias,
                 'content_type': PublicationContentType.NEWS,
-                'author': pastor_user,
+                'author': editor_user,
                 'status': PublicationStatus.PUBLISHED,
                 'published_at': now,
                 'is_featured': True,
@@ -220,7 +214,7 @@ class Command(BaseCommand):
                 'content': 'Las células son el corazón de nuestra comunidad. Encuentra un espacio de amistad, crecimiento espiritual y apoyo mutuo cada semana en tu distrito.',
                 'category': cat_eventos,
                 'content_type': PublicationContentType.GENERAL,
-                'author': pastor_user,
+                'author': editor_user,
                 'status': PublicationStatus.PUBLISHED,
                 'published_at': now - datetime.timedelta(days=2),
                 'is_featured': False,
