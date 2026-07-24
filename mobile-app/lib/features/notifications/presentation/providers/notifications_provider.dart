@@ -66,6 +66,7 @@ final notificationsRepositoryProvider = Provider<NotificationsRepository>((ref) 
 class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> {
   static const _key = 'local_push_notifications';
   Timer? _syncTimer;
+  bool _isFirstSync = true;
 
   LocalNotificationsNotifier() : super([]) {
     _loadFromPrefs();
@@ -170,8 +171,8 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
         state = fetched;
         await _saveToPrefs(fetched);
 
-        // If a brand new notification arrived, show in-app banner AND system status bar notification
-        if (hasNew && newestNotification != null) {
+        // Solo lanzar alerta sonora y banner ruidoso si la notificación llega de verdad en tiempo real DESPUÉS del primer inicio
+        if (hasNew && newestNotification != null && !_isFirstSync) {
           NotificationService().showSystemNotification(
             newestNotification.title,
             newestNotification.body,
@@ -188,6 +189,7 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
             );
           }
         }
+        _isFirstSync = false;
       }
     } catch (_) {}
   }

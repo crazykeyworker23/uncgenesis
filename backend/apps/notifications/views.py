@@ -47,8 +47,8 @@ class NotificationViewSet(viewsets.ModelViewSet):
         if not user or not user.is_authenticated:
             return qs.none()
 
-        # Si la consulta proviene explicitamente del Panel Web Administrativo -> Superusuario ve todo el historial
-        if user.is_superuser and self.request.query_params.get('admin_view') == 'true':
+        # Superusuario en Panel Web (listado admin_view, borrado, edicion o envio manual):
+        if user.is_superuser and (self.request.query_params.get('admin_view') == 'true' or self.action in ['destroy', 'update', 'partial_update', 'send_now']):
             return qs.all()
 
         # Para el feed de la App Movil:
