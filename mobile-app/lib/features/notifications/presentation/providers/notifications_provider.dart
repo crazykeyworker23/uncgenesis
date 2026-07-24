@@ -127,27 +127,25 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
           fetched.add(notif);
         }
 
-        if (fetched.isNotEmpty) {
-          state = fetched;
-          await _saveToPrefs(fetched);
+        state = fetched;
+        await _saveToPrefs(fetched);
 
-          // If a brand new notification arrived, show in-app banner AND system status bar notification
-          if (hasNew && newestNotification != null) {
-            NotificationService().showSystemNotification(
-              newestNotification.title,
-              newestNotification.body,
+        // If a brand new notification arrived, show in-app banner AND system status bar notification
+        if (hasNew && newestNotification != null) {
+          NotificationService().showSystemNotification(
+            newestNotification.title,
+            newestNotification.body,
+          );
+
+          final navState = NotificationService.navigatorKey.currentState;
+          final context = navState?.context;
+          if (context != null) {
+            InAppNotificationBanner.show(
+              context,
+              overlay: navState?.overlay,
+              title: newestNotification.title,
+              body: newestNotification.body,
             );
-
-            final navState = NotificationService.navigatorKey.currentState;
-            final context = navState?.context;
-            if (context != null) {
-              InAppNotificationBanner.show(
-                context,
-                overlay: navState?.overlay,
-                title: newestNotification.title,
-                body: newestNotification.body,
-              );
-            }
           }
         }
       }
