@@ -47,9 +47,9 @@ class NotificationViewSet(viewsets.ModelViewSet):
         if user and user.is_authenticated and user.is_superuser:
             return qs.all()
 
-        # Si el usuario no esta autenticado (invitado / app anonima) -> Solo notificaciones dirigidas a TODOS
+        # Si el usuario no esta autenticado (invitado / app anonima) -> No recibir notificaciones hasta iniciar sesion
         if not user or not user.is_authenticated:
-            return qs.filter(target_audience='ALL', status='SENT')
+            return qs.none()
 
         # Para un usuario autenticado en la App Movil:
         from django.db.models import Q
