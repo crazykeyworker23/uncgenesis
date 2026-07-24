@@ -39,6 +39,34 @@ class NotificationViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'scheduled_for', 'sent_at']
     ordering = ['-created_at']
 
+    def get_queryset(self):
+        user = self.request.user
+        qs = Notification.objects.select_related('sender', 'target_user')
+
+        # Si es superusuario / admin en el panel web -> Ver historial completo
+        if user and user.is_authenticated and user.is_superuser:
+            return qs.all()
+
+        # Si el usuario no esta autenticado (invitado / app anonima) -> Solo notificaciones dirigidas a TODOS
+        if not user or not user.is_authenticated:
+            return qs.filter(target_audience='ALL', status='SENT')
+
+        # Para un usuario autenticado en la App Movil:
+        from django.db.models import Q
+        from apps.roles.models import UserRole, RoleType
+
+        user_roles = set(UserRole.objects.filter(user=user).values_list('role__name', flat=True))
+
+        query = Q(target_audience='ALL')
+        query |= Q(target_audience='USER', target_user=user)
+
+        if RoleType.CELL_LEADER in user_roles:
+            query |= Q(target_audience='LEADERS')
+        if RoleType.MEMBER in user_roles:
+            query |= Q(target_audience='MEMBERS')
+
+        return qs.filter(query, status='SENT').distinct()
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [AllowAny()]
