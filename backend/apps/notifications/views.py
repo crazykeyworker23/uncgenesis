@@ -43,15 +43,15 @@ class NotificationViewSet(viewsets.ModelViewSet):
         user = self.request.user
         qs = Notification.objects.select_related('sender', 'target_user')
 
-        # Si es superusuario / admin en el panel web -> Ver historial completo
-        if user and user.is_authenticated and user.is_superuser:
-            return qs.all()
-
         # Si el usuario no esta autenticado (invitado / app anonima) -> No recibir notificaciones hasta iniciar sesion
         if not user or not user.is_authenticated:
             return qs.none()
 
-        # Para un usuario autenticado en la App Movil:
+        # Si la consulta proviene explicitamente del Panel Web Administrativo -> Superusuario ve todo el historial
+        if user.is_superuser and self.request.query_params.get('admin_view') == 'true':
+            return qs.all()
+
+        # Para el feed de la App Movil (incluso para el superusuario / admin en su telefono):
         from django.db.models import Q
         from apps.roles.models import UserRole, RoleType
 
@@ -60,9 +60,9 @@ class NotificationViewSet(viewsets.ModelViewSet):
         query = Q(target_audience='ALL')
         query |= Q(target_audience='USER', target_user=user)
 
-        if RoleType.CELL_LEADER in user_roles:
+        if user.is_superuser or RoleType.CELL_LEADER in user_roles:
             query |= Q(target_audience='LEADERS')
-        if RoleType.MEMBER in user_roles:
+        if user.is_superuser or RoleType.MEMBER in user_roles:
             query |= Q(target_audience='MEMBERS')
 
         return qs.filter(query, status='SENT').distinct()

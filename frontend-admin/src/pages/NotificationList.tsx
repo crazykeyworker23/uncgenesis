@@ -162,6 +162,7 @@ export const NotificationList: React.FC = () => {
     queryFn: async () => {
       const res = await apiClient.get('/notifications/', {
         params: {
+          admin_view: 'true',
           search: search || undefined,
           status: statusFilter || undefined,
           target_audience: audienceFilter || undefined,
