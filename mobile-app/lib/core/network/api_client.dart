@@ -15,9 +15,6 @@ class ApiClient {
   static String get baseUrl {
     const envUrl = String.fromEnvironment('API_BASE_URL');
     if (envUrl.isNotEmpty) return envUrl;
-    
-    if (kIsWeb) return 'http://72.61.48.152:8080/api/v1';
-    
     return _resolvedBaseUrl;
   }
 
@@ -27,51 +24,7 @@ class ApiClient {
       _resolvedBaseUrl = envUrl;
       return;
     }
-
-    const port = 8000;
-    
-    if (kIsWeb) {
-      _resolvedBaseUrl = 'http://127.0.0.1:$port/api/v1';
-      return;
-    }
-
-    final candidates = [
-      '192.168.1.183', // Local LAN IP for physical phones & emulators
-      '10.0.2.2',      // Android Emulator host loopback
-      '127.0.0.1',      // iOS Simulator / Mac Desktop
-    ];
-
-    final completer = Completer<String>();
-
-    for (final host in candidates) {
-      Future(() async {
-        final client = HttpClient();
-        client.connectionTimeout = const Duration(seconds: 3);
-        try {
-          final request = await client.getUrl(Uri.parse('http://$host:$port/api/v1/settings/public/'));
-          final response = await request.close();
-          if (response.statusCode == 200 && !completer.isCompleted) {
-            completer.complete('http://$host:$port/api/v1');
-          }
-        } catch (_) {} finally {
-          client.close();
-        }
-      });
-    }
-
-    try {
-      _resolvedBaseUrl = await completer.future.timeout(const Duration(seconds: 3));
-    } catch (_) {
-      try {
-        if (Platform.isAndroid) {
-          _resolvedBaseUrl = 'http://192.168.1.183:$port/api/v1';
-        } else {
-          _resolvedBaseUrl = 'http://127.0.0.1:$port/api/v1';
-        }
-      } catch (_) {
-        _resolvedBaseUrl = 'http://192.168.1.183:$port/api/v1';
-      }
-    }
+    _resolvedBaseUrl = 'http://72.61.48.152:8080/api/v1';
   }
 
   ApiClient({
