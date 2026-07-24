@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/providers/core_providers.dart';
 import '../../../../core/widgets/in_app_notification_banner.dart';
@@ -98,6 +99,20 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
 
   Future<void> fetchRemoteNotifications(dynamic dio) async {
     try {
+      // 1. Verificar si el usuario ha iniciado sesion leyendo el token seguro
+      const storage = FlutterSecureStorage();
+      final token = await storage.read(key: 'access_token');
+      
+      // Si NO hay token (modo invitado / sin iniciar sesion), NO recibir ni mostrar notificaciones
+      if (token == null || token.isEmpty) {
+        if (state.isNotEmpty) {
+          state = [];
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove(_key);
+        }
+        return;
+      }
+
       final prefs = await SharedPreferences.getInstance();
       final deletedIds = (prefs.getStringList('deleted_notification_ids') ?? []).toSet();
 
