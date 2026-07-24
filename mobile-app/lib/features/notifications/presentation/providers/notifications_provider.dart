@@ -113,8 +113,14 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
         return;
       }
 
-      final prefs = await SharedPreferences.getInstance();
-      final deletedIds = (prefs.getStringList('deleted_notification_ids') ?? []).toSet();
+      // 2. Obtener el ID del usuario actualmente autenticado para doble validación estricta
+      String? currentUserId;
+      try {
+        final meResponse = await dio.get('/users/me/');
+        if (meResponse.statusCode == 200 && meResponse.data != null) {
+          currentUserId = meResponse.data['id']?.toString();
+        }
+      } catch (_) {}
 
       final response = await dio.get('/notifications/');
       final results = response.data['results'] ?? response.data;
@@ -129,6 +135,16 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
           
           // Ignorar notificaciones eliminadas por el usuario
           if (deletedIds.contains(id)) continue;
+
+          final targetAudience = item['target_audience']?.toString();
+          final targetUser = item['target_user']?.toString();
+
+          // VALIDACIÓN ESTRICTA EN EL CLIENTE: Si la notificación es personal para otro ID de usuario -> DESCARTAR
+          if (targetAudience == 'USER' && targetUser != null && currentUserId != null) {
+            if (targetUser != currentUserId) {
+              continue;
+            }
+          }
 
           final title = item['title'] ?? 'Notificación Génesis';
           final body = item['body'] ?? '';
