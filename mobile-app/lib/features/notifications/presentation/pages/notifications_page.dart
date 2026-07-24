@@ -59,12 +59,26 @@ class NotificationsPage extends ConsumerWidget {
               itemCount: notifications.length,
               itemBuilder: (context, index) {
                 final notif = notifications[index];
-                final dateOnly = notif.receivedAt.split('T')[0];
-                final timeOnly = notif.receivedAt.split('T')[1].substring(0, 5);
+                String dateOnly = notif.receivedAt;
+                String timeOnly = '';
+
+                if (notif.receivedAt.contains('T')) {
+                  final parts = notif.receivedAt.split('T');
+                  dateOnly = parts[0];
+                  if (parts.length > 1 && parts[1].length >= 5) {
+                    timeOnly = parts[1].substring(0, 5);
+                  }
+                } else if (notif.receivedAt.contains(' ')) {
+                  final parts = notif.receivedAt.split(' ');
+                  dateOnly = parts[0];
+                  if (parts.length > 1 && parts[1].length >= 5) {
+                    timeOnly = parts[1].substring(0, 5);
+                  }
+                }
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
-                  color: notif.isRead ? AppColors.cardColor.withValues(alpha: 0.5) : AppColors.cardColor,
+                  color: notif.isRead ? const Color(0xFF1E293B) : const Color(0xFF0F172A),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
                     onTap: () {
@@ -80,13 +94,13 @@ class NotificationsPage extends ConsumerWidget {
                             height: 40,
                             decoration: BoxDecoration(
                               color: notif.isRead 
-                                  ? AppColors.darkTeal.withValues(alpha: 0.5) 
-                                  : AppColors.darkTeal,
+                                  ? const Color(0xFF0D9488).withOpacity(0.4) 
+                                  : const Color(0xFF0D9488),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
                               notif.isRead ? Icons.notifications_none : Icons.notifications_active,
-                              color: notif.isRead ? AppColors.crema.withValues(alpha: 0.5) : AppColors.dorado,
+                              color: notif.isRead ? Colors.white60 : const Color(0xFFD4AF37),
                               size: 20,
                             ),
                           ),
@@ -101,7 +115,8 @@ class NotificationsPage extends ConsumerWidget {
                                     Expanded(
                                       child: Text(
                                         notif.title,
-                                        style: AppTextStyles.titleMedium.copyWith(
+                                        style: TextStyle(
+                                          color: Colors.white,
                                           fontSize: 15,
                                           fontWeight: notif.isRead ? FontWeight.normal : FontWeight.bold,
                                         ),
@@ -112,7 +127,7 @@ class NotificationsPage extends ConsumerWidget {
                                         width: 8,
                                         height: 8,
                                         decoration: const BoxDecoration(
-                                          color: AppColors.dorado,
+                                          color: Color(0xFFD4AF37),
                                           shape: BoxShape.circle,
                                         ),
                                       ),
@@ -121,18 +136,18 @@ class NotificationsPage extends ConsumerWidget {
                                 const SizedBox(height: 6),
                                 Text(
                                   notif.body,
-                                  style: AppTextStyles.bodyMedium.copyWith(
-                                    color: notif.isRead 
-                                        ? AppColors.crema.withValues(alpha: 0.5) 
-                                        : AppColors.crema.withValues(alpha: 0.8),
+                                  style: TextStyle(
+                                    color: notif.isRead ? Colors.white70 : Colors.white,
+                                    fontSize: 13,
+                                    height: 1.3,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  '$dateOnly a las $timeOnly HS',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: AppColors.crema.withValues(alpha: 0.3),
+                                  timeOnly.isNotEmpty ? '$dateOnly - $timeOnly' : dateOnly,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white38,
                                   ),
                                 ),
                               ],
