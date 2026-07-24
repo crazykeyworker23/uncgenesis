@@ -91,7 +91,7 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
   void startAutoSync(dynamic dio) {
     _syncTimer?.cancel();
     fetchRemoteNotifications(dio);
-    _syncTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+    _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       fetchRemoteNotifications(dio);
     });
   }
