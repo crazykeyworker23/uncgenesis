@@ -122,6 +122,9 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
         }
       } catch (_) {}
 
+      final prefs = await SharedPreferences.getInstance();
+      final deletedIds = (prefs.getStringList('deleted_notification_ids') ?? []).toSet();
+
       final response = await dio.get('/notifications/');
       final results = response.data['results'] ?? response.data;
       if (results is List) {
