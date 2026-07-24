@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/providers/core_providers.dart';
+import '../../../../core/widgets/in_app_notification_banner.dart';
+import '../../../../core/notifications/notification_service.dart';
 import '../../data/repositories/notifications_repository_impl.dart';
 import '../../domain/repositories/notifications_repository.dart';
 
@@ -60,9 +64,16 @@ final notificationsRepositoryProvider = Provider<NotificationsRepository>((ref) 
 
 class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> {
   static const _key = 'local_push_notifications';
+  Timer? _syncTimer;
 
   LocalNotificationsNotifier() : super([]) {
     _loadFromPrefs();
+  }
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadFromPrefs() async {
@@ -75,6 +86,67 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
     final prefs = await SharedPreferences.getInstance();
     final jsonList = list.map((item) => json.encode(item.toJson())).toList();
     await prefs.setStringList(_key, jsonList);
+  }
+
+  void startAutoSync(dynamic dio) {
+    _syncTimer?.cancel();
+    fetchRemoteNotifications(dio);
+    _syncTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      fetchRemoteNotifications(dio);
+    });
+  }
+
+  Future<void> fetchRemoteNotifications(dynamic dio) async {
+    try {
+      final response = await dio.get('/notifications/');
+      final results = response.data['results'] ?? response.data;
+      if (results is List) {
+        final existingIds = state.map((n) => n.id).toSet();
+        final List<LocalNotification> fetched = [];
+        bool hasNew = false;
+        LocalNotification? newestNotification;
+
+        for (final item in results) {
+          final title = item['title'] ?? 'Notificación Génesis';
+          final body = item['body'] ?? '';
+          final id = item['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString();
+          final created = item['created_at'] ?? DateTime.now().toIso8601String();
+          
+          final notif = LocalNotification(
+            id: id,
+            title: title,
+            body: body,
+            receivedAt: created,
+            isRead: false,
+          );
+
+          if (!existingIds.contains(id)) {
+            hasNew = true;
+            newestNotification ??= notif;
+          }
+          fetched.add(notif);
+        }
+
+        if (fetched.isNotEmpty) {
+          state = fetched;
+          await _saveToPrefs(fetched);
+
+          // If a brand new notification arrived, show in-app banner immediately
+          if (hasNew && newestNotification != null) {
+            final navState = NotificationService.navigatorKey.currentState;
+            final context = navState?.context;
+            if (context != null) {
+              InAppNotificationBanner.show(
+                context,
+                overlay: navState?.overlay,
+                title: newestNotification.title,
+                body: newestNotification.body,
+              );
+            }
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> addNotification(String title, String body) async {
@@ -104,33 +176,6 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
     final updated = state.map((item) => item.copyWith(isRead: true)).toList();
     state = updated;
     await _saveToPrefs(updated);
-  }
-
-  Future<void> fetchRemoteNotifications(dynamic dio) async {
-    try {
-      final response = await dio.get('/notifications/');
-      final results = response.data['results'] ?? response.data;
-      if (results is List) {
-        final List<LocalNotification> fetched = [];
-        for (final item in results) {
-          final title = item['title'] ?? 'Notificación Génesis';
-          final body = item['body'] ?? '';
-          final id = item['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString();
-          final created = item['created_at'] ?? DateTime.now().toIso8601String();
-          fetched.add(LocalNotification(
-            id: id,
-            title: title,
-            body: body,
-            receivedAt: created,
-            isRead: false,
-          ));
-        }
-        if (fetched.isNotEmpty) {
-          state = fetched;
-          await _saveToPrefs(fetched);
-        }
-      }
-    } catch (_) {}
   }
 
   Future<void> clearAll() async {

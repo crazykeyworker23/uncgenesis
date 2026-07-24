@@ -9,6 +9,9 @@ import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/notifications/notification_service.dart';
 import '../providers/home_provider.dart';
 
+import '../../../../core/providers/core_providers.dart';
+import '../../../notifications/presentation/providers/notifications_provider.dart';
+
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
@@ -16,6 +19,8 @@ class HomePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       NotificationService().showPermissionDialogIfNeeded(context);
+      final apiClient = ref.read(apiClientProvider);
+      ref.read(localNotificationsProvider.notifier).startAutoSync(apiClient.dio);
     });
 
     final settingsAsync = ref.watch(publicSettingsProvider);

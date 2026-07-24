@@ -56,11 +56,12 @@ class NotificationViewSet(viewsets.ModelViewSet):
         
         scheduled = notification.scheduled_for
         if scheduled and scheduled > timezone.now():
-            # Schedule task in the future using eta
             send_push_notification_task.apply_async((notification.id,), eta=scheduled)
         else:
-            # Send immediately
-            send_push_notification_task.delay(notification.id)
+            try:
+                send_push_notification_task.delay(notification.id)
+            except Exception:
+                send_push_notification_task(notification.id)
 
     @action(detail=True, methods=['post'], url_path='send-now')
     def send_now(self, request, pk=None):
