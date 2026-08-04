@@ -9,6 +9,7 @@ from drf_spectacular.utils import extend_schema
 from apps.events.models import Event, EventRegistration, EventRegistrationStatus, EventStatus
 from apps.events.serializers import EventSerializer, EventRegistrationSerializer
 from apps.roles.permissions import HasAppPermission
+from apps.roles.utils import has_any_permission
 from apps.audit.services import log_action
 
 
@@ -18,14 +19,25 @@ class EventViewSet(viewsets.ModelViewSet):
     search_fields = ['title', 'description', 'location']
     ordering_fields = ['start_date', 'created_at']
 
+    MANAGE_PERMISSIONS = ['EVENTS_CREATE', 'EVENTS_EDIT', 'EVENTS_DELETE', 'EVENTS_PUBLISH']
+
     def get_queryset(self):
         # Annotate registered_count to optimize queries
-        return Event.objects.annotate(
+        queryset = Event.objects.annotate(
             registered_count=Count(
                 'registrations',
                 filter=Q(registrations__status=EventRegistrationStatus.CONFIRMED)
             )
         )
+
+        # Los borradores y archivados sólo son visibles para quien gestiona
+        # eventos: antes cualquier visitante podía listarlos o abrirlos por slug.
+        if self.action in ['list', 'retrieve'] and not has_any_permission(
+            self.request.user, self.MANAGE_PERMISSIONS
+        ):
+            queryset = queryset.filter(status=EventStatus.PUBLISHED)
+
+        return queryset
 
     def get_object(self):
         queryset = self.filter_queryset(self.get_queryset())

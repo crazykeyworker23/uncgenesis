@@ -7,11 +7,26 @@ from drf_spectacular.utils import extend_schema
 from apps.services.models import ChurchService, ServiceStatus, ServiceVerse
 from apps.services.serializers import ChurchServiceSerializer
 from apps.roles.permissions import HasAppPermission
+from apps.roles.utils import has_any_permission
 from apps.audit.services import log_action
 
 
 class ChurchServiceViewSet(viewsets.ModelViewSet):
     queryset = ChurchService.objects.all()
+
+    MANAGE_PERMISSIONS = [
+        'SERVICES_CREATE', 'SERVICES_EDIT',
+        'SERVICES_DELETE', 'SERVICES_PUBLISH',
+    ]
+
+    def get_queryset(self):
+        queryset = ChurchService.objects.all()
+        # Sólo los servicios publicados son visibles sin permisos de gestión.
+        if self.action in ['list', 'retrieve'] and not has_any_permission(
+            self.request.user, self.MANAGE_PERMISSIONS
+        ):
+            queryset = queryset.filter(status=ServiceStatus.PUBLISHED)
+        return queryset
     serializer_class = ChurchServiceSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'is_live']

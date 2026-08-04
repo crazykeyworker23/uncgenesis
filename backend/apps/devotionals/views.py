@@ -8,6 +8,7 @@ from drf_spectacular.utils import extend_schema
 from apps.devotionals.models import Devotional, DevotionalStatus
 from apps.devotionals.serializers import DevotionalSerializer
 from apps.roles.permissions import HasAppPermission
+from apps.roles.utils import has_any_permission
 from apps.audit.services import log_action
 
 
@@ -63,6 +64,20 @@ def schedule_devotional_notification(devotional, sender):
 
 class DevotionalViewSet(viewsets.ModelViewSet):
     queryset = Devotional.objects.all()
+
+    MANAGE_PERMISSIONS = [
+        'DEVOTIONALS_CREATE', 'DEVOTIONALS_EDIT',
+        'DEVOTIONALS_DELETE', 'DEVOTIONALS_PUBLISH',
+    ]
+
+    def get_queryset(self):
+        queryset = Devotional.objects.all()
+        # Sólo los devocionales publicados son visibles sin permisos de gestión.
+        if self.action in ['list', 'retrieve', 'today'] and not has_any_permission(
+            self.request.user, self.MANAGE_PERMISSIONS
+        ):
+            queryset = queryset.filter(status=DevotionalStatus.PUBLISHED)
+        return queryset
     serializer_class = DevotionalSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'date']

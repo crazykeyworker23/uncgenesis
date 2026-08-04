@@ -48,14 +48,26 @@ def service_verse(db, church_service):
 @pytest.mark.django_db
 def test_anonymous_read_services(api_client, church_service, service_verse):
     """
-    Cualquiera (incluso anónimo) debe poder ver cultos.
+    Cualquiera (incluso anónimo) debe poder ver los cultos publicados, pero
+    nunca los borradores.
     """
     url = reverse('service-list')
+    detail_url = reverse('service-detail', kwargs={'pk': church_service.id})
+
+    # En borrador no debe ser visible públicamente
+    response = api_client.get(url)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['count'] == 0
+    assert api_client.get(detail_url).status_code == status.HTTP_404_NOT_FOUND
+
+    # Una vez publicado sí
+    church_service.status = ServiceStatus.PUBLISHED
+    church_service.save()
+
     response = api_client.get(url)
     assert response.status_code == status.HTTP_200_OK
     assert response.data['count'] == 1
 
-    detail_url = reverse('service-detail', kwargs={'pk': church_service.id})
     response = api_client.get(detail_url)
     assert response.status_code == status.HTTP_200_OK
     

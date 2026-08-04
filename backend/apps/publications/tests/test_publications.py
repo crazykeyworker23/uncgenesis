@@ -50,14 +50,26 @@ def publication(db, admin_user, category, tag):
 @pytest.mark.django_db
 def test_anonymous_read_publications(api_client, publication):
     """
-    Cualquiera (incluso anónimo) debe poder ver listado y detalle de publicaciones.
+    Cualquiera (incluso anónimo) debe poder ver las publicaciones publicadas,
+    pero nunca los borradores.
     """
     url = reverse('publication-list')
+    detail_url = reverse('publication-detail', kwargs={'pk': publication.id})
+
+    # En borrador no debe ser visible públicamente
+    response = api_client.get(url)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['count'] == 0
+    assert api_client.get(detail_url).status_code == status.HTTP_404_NOT_FOUND
+
+    # Una vez publicada sí
+    publication.status = PublicationStatus.PUBLISHED
+    publication.save()
+
     response = api_client.get(url)
     assert response.status_code == status.HTTP_200_OK
     assert response.data['count'] == 1
 
-    detail_url = reverse('publication-detail', kwargs={'pk': publication.id})
     response = api_client.get(detail_url)
     assert response.status_code == status.HTTP_200_OK
     # Al obtener el detalle se incrementa el contador de visitas

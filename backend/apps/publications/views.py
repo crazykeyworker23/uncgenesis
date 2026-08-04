@@ -18,6 +18,7 @@ from apps.publications.serializers import (
     PublicationDetailSerializer,
 )
 from apps.roles.permissions import HasAppPermission
+from apps.roles.utils import has_any_permission
 from apps.audit.services import log_action
 
 
@@ -51,6 +52,21 @@ class PublicationTagViewSet(viewsets.ModelViewSet):
 
 class PublicationViewSet(viewsets.ModelViewSet):
     queryset = Publication.objects.all()
+
+    MANAGE_PERMISSIONS = [
+        'PUBLICATIONS_CREATE', 'PUBLICATIONS_EDIT',
+        'PUBLICATIONS_DELETE', 'PUBLICATIONS_PUBLISH',
+    ]
+
+    def get_queryset(self):
+        queryset = Publication.objects.all()
+        # Borradores, programadas y archivadas quedan fuera del acceso público:
+        # antes cualquier visitante podía listarlas o abrirlas por slug.
+        if self.action in ['list', 'retrieve'] and not has_any_permission(
+            self.request.user, self.MANAGE_PERMISSIONS
+        ):
+            queryset = queryset.filter(status=PublicationStatus.PUBLISHED)
+        return queryset
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status', 'category', 'content_type', 'is_featured', 'show_in_app']
     search_fields = ['title', 'summary', 'content']

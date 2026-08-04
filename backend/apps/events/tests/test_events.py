@@ -56,16 +56,26 @@ def test_event(db):
 @pytest.mark.django_db
 def test_anonymous_read_events(api_client, test_event):
     """
-    Cualquiera (anónimo) puede listar y ver detalles del evento.
+    Cualquiera (anónimo) puede ver los eventos publicados, pero nunca los
+    borradores.
     """
     url = reverse('event-list')
+    detail_url = reverse('event-detail', kwargs={'pk': test_event.id})
+
+    # En borrador no debe ser visible públicamente
+    response = api_client.get(url)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['count'] == 0
+    assert api_client.get(detail_url).status_code == status.HTTP_404_NOT_FOUND
+
+    # Una vez publicado sí
+    test_event.status = EventStatus.PUBLISHED
+    test_event.save()
+
     response = api_client.get(url)
     assert response.status_code == status.HTTP_200_OK
     assert response.data['count'] == 1
-
-    detail_url = reverse('event-detail', kwargs={'pk': test_event.id})
-    response = api_client.get(detail_url)
-    assert response.status_code == status.HTTP_200_OK
+    assert api_client.get(detail_url).status_code == status.HTTP_200_OK
 
 
 @pytest.mark.django_db

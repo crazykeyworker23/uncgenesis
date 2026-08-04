@@ -122,15 +122,33 @@ class TestFCMDevice:
 
 @pytest.mark.django_db
 class TestNotificationManagement:
-    def test_list_notifications_requires_auth(self, api_client):
-        """Listing notifications requires authentication."""
+    def test_list_notifications_is_empty_for_guests(self, api_client, db):
+        """
+        El modo invitado no recibe notificaciones: la lista responde vacía en
+        lugar de un 401, para que la app no interprete que la sesión expiró.
+        """
+        Notification.objects.create(
+            title="Aviso 1", body="Contenido 1", status=NotificationStatus.SENT
+        )
         res = api_client.get(NOTIFICATIONS_LIST)
-        assert res.status_code == status.HTTP_401_UNAUTHORIZED
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data['results'] == []
 
     def test_list_notifications_as_staff(self, auth_client, db):
-        """Authorized user can list notifications."""
-        Notification.objects.create(title="Aviso 1", body="Contenido 1")
+        """El feed del usuario autenticado muestra las notificaciones enviadas."""
+        Notification.objects.create(
+            title="Aviso 1", body="Contenido 1", status=NotificationStatus.SENT
+        )
         res = auth_client.get(NOTIFICATIONS_LIST)
+        assert res.status_code == status.HTTP_200_OK
+        assert len(res.data['results']) == 1
+
+    def test_list_notifications_admin_view_includes_pending(self, auth_client, db):
+        """El panel administrativo (admin_view) sí ve las pendientes."""
+        Notification.objects.create(
+            title="Programada", body="Aún no enviada", status=NotificationStatus.PENDING
+        )
+        res = auth_client.get(NOTIFICATIONS_LIST, {'admin_view': 'true'})
         assert res.status_code == status.HTTP_200_OK
         assert len(res.data['results']) == 1
 
@@ -151,10 +169,23 @@ class TestNotificationManagement:
         notification = Notification.objects.get(id=res.data['id'])
         assert notification.status == NotificationStatus.SENT
         assert notification.sent_at is not None
-        assert "Simulation:" in notification.error_message
+        # El envío se resuelve en el backend: no debe quedar ningún error.
+        assert notification.error_message == ""
 
-    def test_create_notification_scheduled(self, auth_client):
+    def test_create_notification_scheduled(self, auth_client, monkeypatch):
         """Scheduled notifications remain in PENDING state."""
+        # En pruebas Celery corre en modo eager y ejecutaría la tarea al
+        # instante ignorando el `eta`. Se intercepta el encolado para verificar
+        # el comportamiento real: queda pendiente y programada para su fecha.
+        from apps.notifications import views as notifications_views
+
+        scheduled_calls = []
+        monkeypatch.setattr(
+            notifications_views.send_push_notification_task,
+            'apply_async',
+            lambda args=None, **kwargs: scheduled_calls.append((args, kwargs)),
+        )
+
         future_time = timezone.now() + timezone.timedelta(hours=2)
         payload = {
             'title': 'Recordatorio Próximo',
@@ -164,11 +195,15 @@ class TestNotificationManagement:
         }
         res = auth_client.post(NOTIFICATIONS_LIST, payload, format='json')
         assert res.status_code == status.HTTP_201_CREATED
-        
+
         # Status should be PENDING and sent_at should be null
         notification = Notification.objects.get(id=res.data['id'])
         assert notification.status == NotificationStatus.PENDING
         assert notification.sent_at is None
+
+        # Y debe haber quedado encolada para la fecha indicada
+        assert len(scheduled_calls) == 1
+        assert scheduled_calls[0][1]['eta'] == notification.scheduled_for
 
     def test_send_now_action(self, auth_client):
         """Custom send-now action triggers immediate send for pending notification."""
@@ -210,4 +245,7 @@ class TestNotificationManagement:
         notification = Notification.objects.get(id=res.data['id'])
         assert notification.status == NotificationStatus.SENT
         assert notification.target_user == target_user
-        assert "sent to 1 dummy tokens" in notification.error_message
+        # El destinatario queda acotado a ese usuario y sin errores de envío.
+        assert notification.error_message == ""
+        assert device_target.user == target_user
+        assert device_other.user != target_user

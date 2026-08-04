@@ -39,17 +39,29 @@ def devotional(db, admin_user):
 @pytest.mark.django_db
 def test_anonymous_read_devotionals(api_client, devotional):
     """
-    Cualquiera (anónimo) debe poder ver devocionales.
+    Cualquiera (anónimo) debe poder ver los devocionales publicados, nunca los
+    borradores.
     """
     url = reverse('devotional-list')
+    detail_url = reverse('devotional-detail', kwargs={'pk': devotional.id})
+
+    # En borrador no debe ser visible públicamente
+    response = api_client.get(url)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['count'] == 0
+    assert api_client.get(detail_url).status_code == status.HTTP_404_NOT_FOUND
+
+    # Una vez publicado sí
+    devotional.status = DevotionalStatus.PUBLISHED
+    devotional.save()
+
     response = api_client.get(url)
     assert response.status_code == status.HTTP_200_OK
     assert response.data['count'] == 1
 
-    detail_url = reverse('devotional-detail', kwargs={'pk': devotional.id})
     response = api_client.get(detail_url)
     assert response.status_code == status.HTTP_200_OK
-    
+
     devotional.refresh_from_db()
     assert devotional.views_count == 1
 
