@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/utils/api_error.dart';
+import '../../../../core/utils/date_formatter.dart';
 import '../providers/events_provider.dart';
 import '../../data/models/event_model.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -26,25 +29,38 @@ class _EventDetailPageState extends ConsumerState<EventDetailPage> {
   Future<void> _openMap(String location) async {
     final query = Uri.encodeComponent(location);
     final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (launched || !mounted) return;
+    } catch (_) {
+      if (!mounted) return;
     }
+    // Antes fallaba en silencio si no había app de mapas disponible.
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('No pudimos abrir el mapa en este dispositivo.'),
+        backgroundColor: AppColors.error,
+      ),
+    );
   }
 
   Future<void> _register(int id) async {
-    final authState = ref.read(authProvider);
-    final isGuestOrUnauth = authState.maybeWhen(
-      authenticated: (_) => false,
-      orElse: () => true,
-    );
-
-    if (isGuestOrUnauth) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por favor inicia sesión para inscribirte a los eventos.'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
+    if (ref.read(authProvider).isGuest) {
+      // El invitado ahora puede ir directo al login desde el mismo aviso.
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: const Text('Inicia sesión para inscribirte a los eventos.'),
+            backgroundColor: AppColors.warning,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'INICIAR SESIÓN',
+              textColor: AppColors.deepTeal,
+              onPressed: () => context.push('/auth/login'),
+            ),
+          ),
+        );
       return;
     }
 
@@ -53,28 +69,34 @@ class _EventDetailPageState extends ConsumerState<EventDetailPage> {
     try {
       final repository = ref.read(eventsRepositoryProvider);
       await repository.registerToEvent(id);
-      
+
+      // Refrescamos antes de avisar para que el botón quede en "YA ESTÁS
+      // REGISTRADO" y la lista de "Mis Inscripciones" incluya este evento.
+      ref.invalidate(eventDetailProvider(widget.slug));
+      ref.read(eventsProvider.notifier).refresh();
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Te has inscrito con éxito a este evento!'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-        ref.invalidate(eventDetailProvider(widget.slug));
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(
+              content: Text('¡Te has inscrito con éxito a este evento!'),
+              backgroundColor: AppColors.success,
+            ),
+          );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              e.toString().contains('400') 
-                  ? 'Aforo completo o inscripción duplicada.' 
-                  : 'Error al inscribirse. Intente de nuevo.',
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                ApiError.message(e, fallback: 'No pudimos completar tu inscripción. Intenta de nuevo.'),
+              ),
+              backgroundColor: AppColors.error,
             ),
-            backgroundColor: AppColors.error,
-          ),
-        );
+          );
       }
     } finally {
       if (mounted) {
@@ -134,8 +156,10 @@ class _EventDetailBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final startDateOnly = event.startDate.split('T')[0];
-    final startTimeOnly = event.startDate.split('T')[1].substring(0, 5);
+    // `split('T')[1]` reventaba con RangeError cuando el evento venía sólo con
+    // fecha (sin hora). Ahora el formateo es seguro y en español.
+    final formattedDate = DateFormatter.fullDate(event.startDate);
+    final formattedTime = DateFormatter.time(event.startDate);
     final isFull = event.capacity != null && (event.registeredCount ?? 0) >= event.capacity!;
     final isRegistered = event.isRegistered == true;
 
@@ -173,7 +197,7 @@ class _EventDetailBody extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        event.requiresRegistration ? 'REQUIERE INCRIPCIÓN' : 'ACCESO LIBRE',
+                        event.requiresRegistration ? 'REQUIERE INSCRIPCIÓN' : 'ACCESO LIBRE',
                         style: AppTextStyles.labelSmall.copyWith(color: AppColors.doradoClaro),
                       ),
                     ),
@@ -211,7 +235,9 @@ class _EventDetailBody extends StatelessWidget {
                 _InfoRow(
                   icon: Icons.calendar_today_outlined,
                   title: 'Fecha',
-                  subtitle: '$startDateOnly a las $startTimeOnly HS',
+                  subtitle: formattedTime != null
+                      ? '$formattedDate · $formattedTime'
+                      : formattedDate,
                 ),
                 const SizedBox(height: 16),
 

@@ -125,18 +125,19 @@ void main() {
       expect(storage.data['refresh_token'], 'refresh');
     });
 
-    test('login failure sets state to error', () async {
+    test('login failure sets a user friendly error message', () async {
       repository.shouldFail = true;
       await notifier.login('test@test.com', 'password');
-      expect(notifier.state, isA<AuthState>().having(
-        (s) => s.maybeWhen(error: (msg) => msg, orElse: () => ''),
-        'error message',
-        contains('Login Failed'),
-      ));
+
+      final message = notifier.state.maybeWhen(error: (msg) => msg, orElse: () => '');
+      expect(message, isNotEmpty);
+      // El detalle técnico de la excepción no debe llegar a la pantalla.
+      expect(message, isNot(contains('Exception')));
+      expect(message, isNot(contains('Login Failed')));
     });
 
-    test('guest login sets state to guest', () {
-      notifier.loginAsGuest();
+    test('guest login sets state to guest', () async {
+      await notifier.loginAsGuest();
       expect(notifier.state, const AuthState.guest());
     });
 

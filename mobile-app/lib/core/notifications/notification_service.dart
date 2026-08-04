@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../network/api_client.dart';
@@ -42,6 +43,10 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _localNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
   static GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+  /// Clave del navegador realmente montado por la app (la asigna `initialize`).
+  /// Sirve para mostrar banners internos desde código sin `BuildContext`.
+  GlobalKey<NavigatorState> get activeNavigatorKey => _navigatorKey ?? navigatorKey;
 
   Future<void> _ensureFirebaseInitialized() async {
     if (Firebase.apps.isEmpty) {
@@ -172,6 +177,21 @@ class NotificationService {
 
   Future<void> registerToken([String? explicitToken]) async {
     if (_apiClient == null) return;
+
+    // `/notifications/devices/` exige sesión iniciada. En modo invitado la
+    // llamada sólo generaba un 401 en cada arranque.
+    try {
+      const storage = FlutterSecureStorage();
+      final accessToken = await storage.read(key: 'access_token');
+      if (accessToken == null || accessToken.isEmpty) {
+        debugPrint('Modo invitado: se omite el registro del dispositivo FCM.');
+        return;
+      }
+    } catch (e) {
+      debugPrint('No se pudo verificar la sesión antes de registrar el token: $e');
+      return;
+    }
+
     String? token = explicitToken;
     if (token == null || token.isEmpty) {
       try {
@@ -273,8 +293,14 @@ class NotificationService {
     return settings;
   }
 
+  static const _permissionDismissedKey = 'notification_permission_dismissed';
+
   Future<void> showPermissionDialogIfNeeded(BuildContext context) async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      // Si el usuario ya respondió "Ahora no", no se le vuelve a preguntar.
+      if (prefs.getBool(_permissionDismissedKey) ?? false) return;
+
       await _ensureFirebaseInitialized();
       final messaging = FirebaseMessaging.instance;
       final settings = await messaging.getNotificationSettings();
@@ -290,14 +316,14 @@ class NotificationService {
             backgroundColor: const Color(0xFF0F172A),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
-              side: BorderSide(color: const Color(0xFFD4AF37).withOpacity(0.4), width: 1.5),
+              side: BorderSide(color: const Color(0xFFD4AF37).withValues(alpha: 0.4), width: 1.5),
             ),
             title: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFD4AF37).withOpacity(0.2),
+                    color: const Color(0xFFD4AF37).withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.notifications_active_rounded, color: Color(0xFFD4AF37), size: 24),
@@ -317,7 +343,11 @@ class NotificationService {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool(_permissionDismissedKey, true);
+                },
                 child: const Text('Ahora no', style: TextStyle(color: Colors.white38, fontSize: 12)),
               ),
               ElevatedButton(

@@ -8,4 +8,7 @@ abstract class EventsRepository {
   });
   Future<EventModel> getEventDetail(String slug);
   Future<void> registerToEvent(int eventId);
+
+  /// Eventos publicados en los que el usuario autenticado está inscrito.
+  Future<List<EventModel>> getMyRegisteredEvents();
 }

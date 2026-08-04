@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 
 import '../../../../core/providers/core_providers.dart';
 import '../../../../core/notifications/notification_service.dart';
+import '../../../../core/utils/api_error.dart';
 import '../../data/models/user_model.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/repositories/auth_repository.dart';
@@ -19,6 +20,25 @@ class AuthState with _$AuthState {
   const factory AuthState.unauthenticated() = _Unauthenticated;
   const factory AuthState.guest() = _Guest;
   const factory AuthState.error(String message) = _Error;
+}
+
+extension AuthStateX on AuthState {
+  /// `true` sólo cuando hay una sesión real con el backend.
+  bool get isAuthenticated => maybeWhen(authenticated: (_) => true, orElse: () => false);
+
+  /// Cualquier estado que NO sea una sesión iniciada se navega como invitado.
+  bool get isGuest => !isAuthenticated;
+
+  bool get isLoading => maybeWhen(loading: () => true, orElse: () => false);
+
+  UserModel? get user => maybeWhen(authenticated: (user) => user, orElse: () => null);
+
+  /// Identidad de la sesión activa; se usa para refrescar los datos que
+  /// dependen del usuario cuando cambia entre invitado y sesión iniciada.
+  String get identity => maybeWhen(
+        authenticated: (user) => 'user:${user.id}',
+        orElse: () => 'guest',
+      );
 }
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
@@ -40,22 +60,42 @@ class AuthNotifier extends StateNotifier<AuthState> {
     Future.microtask(() => checkAuth());
   }
 
+  /// El interceptor HTTP avisa cuando el backend invalidó la sesión para que
+  /// la interfaz deje de mostrar al usuario como conectado.
+  void handleSessionExpired() {
+    if (!mounted) return;
+    state.maybeWhen(
+      authenticated: (_) => state = const AuthState.unauthenticated(),
+      orElse: () {},
+    );
+  }
+
   Future<void> checkAuth() async {
     state = const AuthState.loading();
+    final accessToken = await _storage.read(key: 'access_token');
+    if (accessToken == null || accessToken.isEmpty) {
+      state = const AuthState.unauthenticated();
+      return;
+    }
+
     try {
-      final accessToken = await _storage.read(key: 'access_token');
-      if (accessToken != null) {
-        final user = await _repository.getMe();
-        state = AuthState.authenticated(user: user);
-        NotificationService().registerToken();
-      } else {
+      final user = await _repository.getMe();
+      state = AuthState.authenticated(user: user);
+      NotificationService().registerToken();
+    } catch (e) {
+      // Un fallo de red NO debe destruir la sesión: sin internet el usuario
+      // perdía su cuenta y tenía que volver a escribir sus credenciales.
+      // Sólo cerramos sesión cuando el servidor rechaza el token.
+      if (ApiError.isNetworkIssue(e)) {
         state = const AuthState.unauthenticated();
+        return;
       }
-    } catch (_) {
-      // In case profile loading failed (e.g. token expired and refresh failed), clear session
       await logout();
     }
   }
+
+  /// Reintenta recuperar la sesión guardada (usado al recuperar conexión).
+  Future<void> retrySession() => checkAuth();
 
   Future<void> login(String email, String password) async {
     state = const AuthState.loading();
@@ -113,34 +153,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   String _handleError(dynamic e) {
-    if (e is DioException) {
-      if (e.response?.data != null) {
-        final data = e.response!.data;
-        if (data is Map) {
-          final messages = <String>[];
-          data.forEach((key, value) {
-            if (value is List) {
-              messages.add('$key: ${value.join(", ")}');
-            } else if (value is Map) {
-              value.forEach((k, v) {
-                messages.add('$k: $v');
-              });
-            } else if (value is String) {
-              messages.add('$key: $value');
-            } else {
-              messages.add('$key: ${value.toString()}');
-            }
-          });
-          if (messages.isNotEmpty) {
-            return messages.join('\n');
-          }
-        } else if (data is String && data.isNotEmpty) {
-          return data;
-        }
-      }
-      return e.message ?? e.toString();
+    // Credenciales inválidas: el backend responde 401 con "No active account…",
+    // que no le dice nada al usuario final.
+    if (e is DioException && e.response?.statusCode == 401) {
+      return 'Correo o contraseña incorrectos. Verifica tus datos e intenta de nuevo.';
     }
-    return e.toString();
+    return ApiError.message(
+      e,
+      fallback: 'No pudimos completar la operación. Intenta de nuevo.',
+    );
+  }
+
+  /// Limpia un estado de error para que la pantalla vuelva a un estado usable.
+  void clearError() {
+    state.maybeWhen(
+      error: (_) => state = const AuthState.unauthenticated(),
+      orElse: () {},
+    );
   }
 
   Future<void> loginAsGuest() async {
@@ -193,5 +222,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final repository = ref.watch(authRepositoryProvider);
   final storage = ref.watch(secureStorageProvider);
-  return AuthNotifier(repository: repository, storage: storage);
+  final notifier = AuthNotifier(repository: repository, storage: storage);
+  ref.watch(apiClientProvider).onSessionExpired = notifier.handleSessionExpired;
+  return notifier;
 });

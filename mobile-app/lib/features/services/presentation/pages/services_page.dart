@@ -111,7 +111,7 @@ class _ServiceCard extends StatelessWidget {
         side: BorderSide(
           color: service.isLive
               ? Colors.redAccent
-              : AppColors.dorado.withOpacity(0.2),
+              : AppColors.dorado.withValues(alpha: 0.2),
           width: service.isLive ? 1.5 : 1.0,
         ),
       ),
@@ -137,7 +137,7 @@ class _ServiceCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.redAccent.withOpacity(0.2),
+                        color: Colors.redAccent.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.redAccent, width: 1),
                       ),
@@ -201,7 +201,7 @@ class _ServiceCard extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.crema.withOpacity(0.8),
+                    color: AppColors.crema.withValues(alpha: 0.8),
                   ),
                 ),
               ],
@@ -216,9 +216,9 @@ class _ServiceCard extends StatelessWidget {
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: AppColors.dorado.withOpacity(0.15),
+                        color: AppColors.dorado.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.dorado.withOpacity(0.3)),
+                        border: Border.all(color: AppColors.dorado.withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         '${v.book} ${v.chapter}:${v.verses}',

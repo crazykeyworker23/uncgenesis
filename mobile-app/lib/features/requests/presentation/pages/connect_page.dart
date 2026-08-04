@@ -11,12 +11,24 @@ import '../providers/requests_provider.dart';
 class ConnectPage extends ConsumerWidget {
   const ConnectPage({super.key});
 
-  Future<void> _openWhatsApp(String number) async {
-    final cleanNumber = number.replaceAll(RegExp(r'[+\s]'), '');
-    final uri = Uri.parse('https://wa.me/$cleanNumber?text=Hola,%20quisiera%20contactar%20con%20la%20iglesia%20Génesis.');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+  Future<void> _openWhatsApp(BuildContext context, String number) async {
+    final cleanNumber = number.replaceAll(RegExp(r'[^0-9]'), '');
+    final uri = Uri.parse(
+      'https://wa.me/$cleanNumber?text=${Uri.encodeComponent('Hola, quisiera contactar con la iglesia Génesis.')}',
+    );
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (launched || !context.mounted) return;
+    } catch (_) {
+      if (!context.mounted) return;
     }
+    // Antes, si WhatsApp no estaba instalado, el botón no hacía nada.
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('No pudimos abrir WhatsApp. Verifica que esté instalado.'),
+        backgroundColor: AppColors.error,
+      ),
+    );
   }
 
   @override
@@ -167,7 +179,7 @@ class ConnectPage extends ConsumerWidget {
                         ),
                         icon: const Icon(Icons.chat),
                         label: const Text('ESCRIBIR POR WHATSAPP', style: TextStyle(fontWeight: FontWeight.bold)),
-                        onPressed: () => _openWhatsApp(phone),
+                        onPressed: () => _openWhatsApp(context, phone),
                       ),
                     ],
                   ),

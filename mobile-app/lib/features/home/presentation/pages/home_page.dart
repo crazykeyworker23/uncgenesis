@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
@@ -10,20 +8,36 @@ import '../../../../core/notifications/notification_service.dart';
 import '../providers/home_provider.dart';
 
 import '../../../../core/providers/core_providers.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../notifications/presentation/providers/notifications_provider.dart';
 
-class HomePage extends ConsumerWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends ConsumerState<HomePage> {
+  @override
+  void initState() {
+    super.initState();
+    // Se ejecuta una sola vez: antes vivía dentro de `build`, así que cada
+    // reconstrucción reiniciaba el temporizador de sincronización y volvía a
+    // evaluar el diálogo de permisos.
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       NotificationService().showPermissionDialogIfNeeded(context);
       final apiClient = ref.read(apiClientProvider);
       ref.read(localNotificationsProvider.notifier).startAutoSync(apiClient.dio);
     });
+  }
 
+  @override
+  Widget build(BuildContext context) {
     final settingsAsync = ref.watch(publicSettingsProvider);
+    final authState = ref.watch(authProvider);
+    final unreadCount = ref.watch(localNotificationsProvider).where((n) => !n.isRead).length;
 
     return Scaffold(
       backgroundColor: AppColors.darkGreen,
@@ -129,31 +143,42 @@ class HomePage extends ConsumerWidget {
                                 color: AppColors.dorado,
                                 size: 28,
                               ),
-                              Positioned(
-                                top: -2,
-                                right: -2,
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.redAccent,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Text(
-                                    '3',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
+                              // El contador refleja las notificaciones sin leer
+                              // reales; antes estaba fijo en "3" incluso en
+                              // modo invitado, donde no hay notificaciones.
+                              if (unreadCount > 0)
+                                Positioned(
+                                  top: -4,
+                                  right: -4,
+                                  child: Container(
+                                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.redAccent,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      unreadCount > 99 ? '99+' : '$unreadCount',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
                             ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 20),
+
+                    // Estado de la sesión: deja claro si se navega como
+                    // invitado y ofrece el acceso directo a iniciar sesión.
+                    _SessionBanner(authState: authState),
+                    const SizedBox(height: 12),
 
                     // Cursive Hero Welcome Texts: Bienvenido a Génesis
                     const Center(
@@ -274,18 +299,18 @@ class HomePage extends ConsumerWidget {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            const Color(0xFF042F30).withOpacity(0.8),
-                            const Color(0xFF021B1C).withOpacity(0.8),
+                            const Color(0xFF042F30).withValues(alpha: 0.8),
+                            const Color(0xFF021B1C).withValues(alpha: 0.8),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: AppColors.dorado.withOpacity(0.4),
+                          color: AppColors.dorado.withValues(alpha: 0.4),
                           width: 1.2,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.3),
+                            color: Colors.black.withValues(alpha: 0.3),
                             blurRadius: 10,
                             offset: const Offset(0, 5),
                           ),
@@ -299,7 +324,7 @@ class HomePage extends ConsumerWidget {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: AppColors.dorado.withOpacity(0.3),
+                                color: AppColors.dorado.withValues(alpha: 0.3),
                                 width: 1,
                               ),
                             ),
@@ -308,7 +333,7 @@ class HomePage extends ConsumerWidget {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 border: Border.all(
-                                  color: AppColors.dorado.withOpacity(0.6),
+                                  color: AppColors.dorado.withValues(alpha: 0.6),
                                   width: 1.5,
                                 ),
                               ),
@@ -324,7 +349,7 @@ class HomePage extends ConsumerWidget {
                           Container(
                             height: 48,
                             width: 1,
-                            color: AppColors.dorado.withOpacity(0.3),
+                            color: AppColors.dorado.withValues(alpha: 0.3),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
@@ -391,18 +416,18 @@ class HomePage extends ConsumerWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF042F30).withOpacity(0.85),
-              const Color(0xFF021B1C).withOpacity(0.85),
+              const Color(0xFF042F30).withValues(alpha: 0.85),
+              const Color(0xFF021B1C).withValues(alpha: 0.85),
             ],
           ),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: AppColors.dorado.withOpacity(0.2),
+            color: AppColors.dorado.withValues(alpha: 0.2),
             width: 1.0,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.25),
+              color: Colors.black.withValues(alpha: 0.25),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -416,7 +441,7 @@ class HomePage extends ConsumerWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: AppColors.dorado.withOpacity(0.4),
+                  color: AppColors.dorado.withValues(alpha: 0.4),
                   width: 1.0,
                 ),
               ),
@@ -442,6 +467,77 @@ class HomePage extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Franja superior que identifica el modo de uso actual.
+///
+/// En modo invitado invita a iniciar sesión (sin bloquear el contenido) y con
+/// sesión iniciada saluda a la persona por su nombre.
+class _SessionBanner extends StatelessWidget {
+  final AuthState authState;
+
+  const _SessionBanner({required this.authState});
+
+  @override
+  Widget build(BuildContext context) {
+    if (authState.isLoading) return const SizedBox.shrink();
+
+    final user = authState.user;
+    final isAuthenticated = user != null;
+    final firstName = isAuthenticated
+        ? (user.firstName?.trim().isNotEmpty == true
+            ? user.firstName!.trim()
+            : user.fullName.split(' ').first)
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF042F30).withValues(alpha: 0.75),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.dorado.withValues(alpha: isAuthenticated ? 0.30 : 0.20),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isAuthenticated ? Icons.verified_user_outlined : Icons.person_outline,
+            color: AppColors.doradoClaro,
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              isAuthenticated
+                  ? 'Hola, $firstName · Sesión iniciada'
+                  : 'Estás navegando como invitado',
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.crema.withValues(alpha: 0.9),
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (!isAuthenticated)
+            TextButton(
+              onPressed: () => context.push('/auth/login'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.dorado,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'INICIAR SESIÓN',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+              ),
+            ),
+        ],
       ),
     );
   }

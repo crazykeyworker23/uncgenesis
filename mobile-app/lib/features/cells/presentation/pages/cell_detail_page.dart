@@ -4,6 +4,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/storage/local_requests_store.dart';
+import '../../../../core/utils/api_error.dart';
+import '../../../../core/utils/date_formatter.dart';
 import '../providers/cells_provider.dart';
 import '../../data/models/cell_model.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -172,7 +175,7 @@ class CellDetailPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: ageRange,
+                        initialValue: ageRange,
                         decoration: const InputDecoration(labelText: 'Rango de Edad'),
                         dropdownColor: AppColors.cardColor,
                         style: AppTextStyles.bodyMedium,
@@ -186,7 +189,7 @@ class CellDetailPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: howFound,
+                        initialValue: howFound,
                         decoration: const InputDecoration(labelText: '¿Cómo nos conociste?'),
                         dropdownColor: AppColors.cardColor,
                         style: AppTextStyles.bodyMedium,
@@ -200,7 +203,7 @@ class CellDetailPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: preferredContact,
+                        initialValue: preferredContact,
                         decoration: const InputDecoration(labelText: 'Contacto Preferido'),
                         dropdownColor: AppColors.cardColor,
                         style: AppTextStyles.bodyMedium,
@@ -250,6 +253,13 @@ class CellDetailPage extends ConsumerWidget {
 
                               ref.invalidate(cellStatusProvider);
 
+                              // Queda registrada en "Mis Solicitudes".
+                              await ref.read(submittedRequestsProvider.notifier).add(
+                                    type: SubmittedRequestType.visitor,
+                                    subject: 'Quiero integrarme a la célula ${cell.name}',
+                                    detail: messageController.text.trim(),
+                                  );
+
                               if (context.mounted) {
                                 Navigator.pop(ctx);
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -259,18 +269,23 @@ class CellDetailPage extends ConsumerWidget {
                                   ),
                                 );
                               }
+                              // El diálogo ya se cerró: tocar su estado aquí
+                              // provocaba un setState sobre un widget destruido.
+                              return;
                             } catch (e) {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('Error al enviar la solicitud: $e'),
+                                    content: Text(
+                                      ApiError.message(e,
+                                          fallback: 'No pudimos enviar tu solicitud. Intenta de nuevo.'),
+                                    ),
                                     backgroundColor: AppColors.error,
                                   ),
                                 );
                               }
-                            } finally {
-                              setState(() => isSubmitting = false);
                             }
+                            setState(() => isSubmitting = false);
                           }
                         },
                   style: ElevatedButton.styleFrom(
@@ -417,7 +432,7 @@ class _CellDetailBody extends StatelessWidget {
           _CellInfoRow(
             icon: Icons.access_time,
             title: 'Hora de Reunión',
-            subtitle: '${cell.meetingTime.substring(0, 5)} HS',
+            subtitle: '${DateFormatter.clockTime(cell.meetingTime, fallback: 'Por confirmar')} HS',
           ),
           const SizedBox(height: 16),
 

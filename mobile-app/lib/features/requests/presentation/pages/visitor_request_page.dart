@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/utils/date_formatter.dart';
+import '../../../../core/storage/local_requests_store.dart';
+import '../../../../core/utils/api_error.dart';
 import '../providers/requests_provider.dart';
 import '../../data/models/requests_model.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -149,7 +153,7 @@ class _VisitorRequestPageState extends ConsumerState<VisitorRequestPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Reunión: ${cell['meeting_day']} • ${cell['meeting_time']?.toString().substring(0, 5)} HS\nDirección: ${cell['address']}',
+              'Reunión: ${cell['meeting_day'] ?? ''} • ${DateFormatter.clockTime(cell['meeting_time'])} HS\nDirección: ${cell['address'] ?? ''}',
               textAlign: TextAlign.center,
               style: AppTextStyles.bodyMedium.copyWith(color: AppColors.crema.withValues(alpha: 0.7)),
             ),
@@ -309,7 +313,7 @@ class _VisitorRequestPageState extends ConsumerState<VisitorRequestPage> {
 
             // Cell Selector Dropdown
             DropdownButtonFormField<int?>(
-              value: _selectedCellId,
+              initialValue: _selectedCellId,
               isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Célula de Interés (Opcional)',
@@ -348,7 +352,7 @@ class _VisitorRequestPageState extends ConsumerState<VisitorRequestPage> {
             const SizedBox(height: 16),
 
             DropdownButtonFormField<String>(
-              value: _ageRange,
+              initialValue: _ageRange,
               decoration: const InputDecoration(
                 labelText: 'Rango de Edad',
                 prefixIcon: Icon(Icons.cake_outlined, color: AppColors.dorado),
@@ -366,7 +370,7 @@ class _VisitorRequestPageState extends ConsumerState<VisitorRequestPage> {
             const SizedBox(height: 16),
 
             DropdownButtonFormField<String>(
-              value: _howFound,
+              initialValue: _howFound,
               decoration: const InputDecoration(
                 labelText: '¿Cómo nos conociste?',
                 prefixIcon: Icon(Icons.explore_outlined, color: AppColors.dorado),
@@ -384,7 +388,7 @@ class _VisitorRequestPageState extends ConsumerState<VisitorRequestPage> {
             const SizedBox(height: 16),
 
             DropdownButtonFormField<String>(
-              value: _preferredContact,
+              initialValue: _preferredContact,
               decoration: const InputDecoration(
                 labelText: 'Medio de Contacto Preferido',
                 prefixIcon: Icon(Icons.contact_phone_outlined, color: AppColors.dorado),
@@ -470,17 +474,30 @@ class _VisitorRequestPageState extends ConsumerState<VisitorRequestPage> {
 
         ref.invalidate(cellStatusProvider);
 
+        // Queda registrada en "Mis Solicitudes" (también en modo invitado).
+        await ref.read(submittedRequestsProvider.notifier).add(
+              type: SubmittedRequestType.visitor,
+              subject: _selectedCellName != null
+                  ? 'Quiero integrarme a la célula $_selectedCellName'
+                  : 'Solicitud de visita / información',
+              detail: rawMessage,
+            );
+
         if (mounted) {
           _showSuccessDialog();
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error al enviar la solicitud: $e'),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Text(
+                  ApiError.message(e, fallback: 'No pudimos enviar tu solicitud. Intenta de nuevo.'),
+                ),
+                backgroundColor: AppColors.error,
+              ),
+            );
         }
       } finally {
         if (mounted) {
@@ -528,7 +545,11 @@ class _VisitorRequestPageState extends ConsumerState<VisitorRequestPage> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              Navigator.pop(context);
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/connect');
+              }
             },
             child: Text(
               'ACEPTAR',

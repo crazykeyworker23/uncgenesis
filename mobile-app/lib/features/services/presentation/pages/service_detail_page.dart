@@ -95,7 +95,7 @@ class ServiceDetailPage extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.2),
+                      color: Colors.red.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.redAccent),
                     ),
@@ -209,7 +209,7 @@ class ServiceDetailPage extends ConsumerWidget {
                     decoration: BoxDecoration(
                       color: AppColors.cardColor,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.dorado.withOpacity(0.2)),
+                      border: Border.all(color: AppColors.dorado.withValues(alpha: 0.2)),
                     ),
                     child: Text(
                       service.sermonNotes!,
@@ -239,7 +239,7 @@ class _VerseCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.dorado.withOpacity(0.3)),
+        border: Border.all(color: AppColors.dorado.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

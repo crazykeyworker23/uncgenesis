@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io' show Platform, HttpClient;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -9,6 +7,11 @@ class ApiClient {
   final FlutterSecureStorage _storage;
   bool _isRefreshing = false;
   Completer<String?>? _refreshCompleter;
+
+  /// Se invoca cuando el backend invalida la sesión y hay que limpiar el
+  /// estado de la app. Sin esto, los tokens se borraban en silencio y la
+  /// interfaz seguía mostrando al usuario como conectado.
+  void Function()? onSessionExpired;
 
   static String _resolvedBaseUrl = 'http://72.61.48.152:8080/api/v1';
 
@@ -186,7 +189,11 @@ class ApiClient {
   }
 
   Future<void> _logout() async {
+    final hadSession = await _storage.read(key: 'access_token') != null;
     await _storage.delete(key: 'access_token');
     await _storage.delete(key: 'refresh_token');
+    if (hadSession) {
+      onSessionExpired?.call();
+    }
   }
 }

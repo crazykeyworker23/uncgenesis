@@ -38,23 +38,10 @@ class EventsRepositoryImpl implements EventsRepository {
 
     final response = await _dio.get('/events/', queryParameters: queryParams);
     final List<dynamic> results = _parseListResponse(response.data);
-    final allEvents = results.map((json) => EventModel.fromJson(json)).toList();
-
-    if (filterType == 'UPCOMING') {
-      final now = DateTime.now();
-      return allEvents.where((e) {
-        final startDate = DateTime.tryParse(e.startDate);
-        return startDate != null && startDate.isAfter(now);
-      }).toList();
-    } else if (filterType == 'PAST') {
-      final now = DateTime.now();
-      return allEvents.where((e) {
-        final startDate = DateTime.tryParse(e.startDate);
-        return startDate != null && startDate.isBefore(now);
-      }).toList();
-    }
-
-    return allEvents;
+    // El filtro por fecha se aplica en el notifier: si se recortara aquí, el
+    // cálculo de "quedan más páginas" usaría el listado ya filtrado y la
+    // paginación se detendría antes de tiempo.
+    return results.map((json) => EventModel.fromJson(json)).toList();
   }
 
   @override
@@ -66,5 +53,34 @@ class EventsRepositoryImpl implements EventsRepository {
   @override
   Future<void> registerToEvent(int eventId) async {
     await _dio.post('/events/$eventId/register/');
+  }
+
+  @override
+  Future<List<EventModel>> getMyRegisteredEvents() async {
+    // El backend no expone un endpoint "mis inscripciones", así que se recorre
+    // la lista publicada y se filtra por `is_registered`, que el serializador
+    // calcula para el usuario autenticado.
+    const maxPages = 20;
+    final registered = <EventModel>[];
+
+    for (var page = 1; page <= maxPages; page++) {
+      final response = await _dio.get('/events/', queryParameters: {
+        'page': page,
+        'status': 'PUBLISHED',
+        'ordering': 'start_date',
+      });
+
+      final results = _parseListResponse(response.data);
+      if (results.isEmpty) break;
+
+      registered.addAll(
+        results.map((json) => EventModel.fromJson(json)).where((e) => e.isRegistered == true),
+      );
+
+      final hasNext = response.data is Map && response.data['next'] != null;
+      if (!hasNext) break;
+    }
+
+    return registered;
   }
 }

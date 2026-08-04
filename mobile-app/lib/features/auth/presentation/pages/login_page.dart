@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
@@ -27,6 +26,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     super.dispose();
   }
 
+  /// Cierra la pantalla de acceso volviendo a donde estaba la persona.
+  void _leaveLogin(BuildContext context) {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/home');
+    }
+  }
+
   void _submit() {
     if (_formKey.currentState?.validate() ?? false) {
       ref.read(authProvider.notifier).login(
@@ -40,18 +48,22 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(authProvider);
 
-    // Watch auth state to redirect to home on successful authentication
+    // Al autenticarse se vuelve a la pantalla desde la que se pidió el acceso
+    // (por ejemplo el detalle de un evento) en lugar de mandar siempre al
+    // inicio y perder lo que la persona estaba haciendo.
     ref.listen<AuthState>(authProvider, (previous, next) {
       next.maybeWhen(
-        authenticated: (user) => context.go('/home'),
-        guest: () => context.go('/home'),
+        authenticated: (user) => _leaveLogin(context),
+        guest: () => _leaveLogin(context),
         error: (message) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Text(message),
+                backgroundColor: AppColors.error,
+              ),
+            );
         },
         orElse: () {},
       );
@@ -356,6 +368,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               ),
             ),
           ),
+
+          // Botón para volver cuando se llegó desde otra pantalla: antes no
+          // había forma visible de regresar sin cerrar la app.
+          if (context.canPop())
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 4,
+              left: 4,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: AppColors.crema),
+                tooltip: 'Volver',
+                onPressed: isLoading ? null : () => context.pop(),
+              ),
+            ),
         ],
       ),
     );

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/providers/core_providers.dart';
 import '../../data/repositories/publications_repository_impl.dart';
@@ -88,7 +89,7 @@ class PublicationsNotifier extends StateNotifier<PublicationsState> {
       );
     } catch (e) {
       if (requestToken == _currentRequestToken) {
-        print("Error loading publications: $e");
+        debugPrint('Error loading publications: $e');
         state = state.copyWith(isLoading: false, hasMore: false);
       }
     }

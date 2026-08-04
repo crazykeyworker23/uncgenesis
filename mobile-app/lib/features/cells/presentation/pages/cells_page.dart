@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/utils/date_formatter.dart';
 import '../providers/cells_provider.dart';
 import '../../data/models/cell_model.dart';
 import '../../../requests/presentation/providers/requests_provider.dart';
@@ -131,7 +132,7 @@ class _CellsPageState extends ConsumerState<CellsPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Reuniones: ${assignedCell['meeting_day']} • ${assignedCell['meeting_time']?.toString().substring(0, 5) ?? ''} HS\nDirección: ${assignedCell['address'] ?? ''}',
+                      'Reuniones: ${assignedCell['meeting_day'] ?? ''} • ${DateFormatter.clockTime(assignedCell['meeting_time'])} HS\nDirección: ${assignedCell['address'] ?? ''}',
                       style: AppTextStyles.bodySmall.copyWith(color: AppColors.crema.withValues(alpha: 0.8), height: 1.3),
                     ),
                   ],

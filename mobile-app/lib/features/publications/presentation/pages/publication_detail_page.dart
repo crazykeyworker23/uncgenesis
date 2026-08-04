@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/utils/date_formatter.dart';
 import '../providers/publications_provider.dart';
 import '../../data/models/publication_model.dart';
 
@@ -95,7 +96,7 @@ class _PublicationDetailBody extends StatelessWidget {
                     ),
                     if (publication.publishedAt != null)
                       Text(
-                        publication.publishedAt!.split('T')[0],
+                        DateFormatter.fullDate(publication.publishedAt),
                         style: AppTextStyles.bodySmall.copyWith(color: AppColors.crema.withValues(alpha: 0.5)),
                       ),
                   ],

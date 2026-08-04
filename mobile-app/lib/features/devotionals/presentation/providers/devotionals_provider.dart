@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/providers/core_providers.dart';
@@ -74,7 +75,7 @@ class DevotionalsNotifier extends StateNotifier<DevotionalsState> {
       );
     } catch (e) {
       if (requestToken == _currentRequestToken) {
-        print("Error loading devotionals: $e");
+        debugPrint('Error loading devotionals: $e');
         state = state.copyWith(isLoading: false, hasMore: false);
       }
     }
@@ -132,4 +133,29 @@ class SavedDevotionalsNotifier extends StateNotifier<List<String>> {
 
 final savedDevotionalsProvider = StateNotifierProvider<SavedDevotionalsNotifier, List<String>>((ref) {
   return SavedDevotionalsNotifier();
+});
+
+/// Devocionales marcados como favoritos, resueltos contra el backend.
+///
+/// Antes la pantalla cruzaba los slugs guardados con la lista ya cargada en
+/// memoria: un favorito que no estuviera en la primera página simplemente no
+/// aparecía. Ahora se pide cada uno por su slug.
+final savedDevotionalsDetailProvider =
+    FutureProvider.autoDispose<List<DevotionalModel>>((ref) async {
+  final slugs = ref.watch(savedDevotionalsProvider);
+  if (slugs.isEmpty) return const [];
+
+  final repository = ref.watch(devotionalsRepositoryProvider);
+  final results = await Future.wait(
+    slugs.map((slug) async {
+      try {
+        return await repository.getDevotionalDetail(slug);
+      } catch (_) {
+        // Un devocional eliminado en el servidor no debe romper la lista.
+        return null;
+      }
+    }),
+  );
+
+  return results.whereType<DevotionalModel>().toList();
 });

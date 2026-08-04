@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/storage/local_requests_store.dart';
+import '../../../../core/utils/api_error.dart';
 import '../providers/requests_provider.dart';
 import '../../data/models/requests_model.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -81,7 +84,7 @@ class _PrayerRequestPageState extends ConsumerState<PrayerRequestPage> {
                 decoration: BoxDecoration(
                   color: AppColors.cardColor,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.dorado.withOpacity(0.3)),
+                  border: Border.all(color: AppColors.dorado.withValues(alpha: 0.3)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -103,7 +106,7 @@ class _PrayerRequestPageState extends ConsumerState<PrayerRequestPage> {
                     Text(
                       'Escribe tu motivo de oración. Nuestro equipo ministerial e intercesores estarán orando por ti con confidencialidad y fe.',
                       style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.crema.withOpacity(0.8),
+                        color: AppColors.crema.withValues(alpha: 0.8),
                         height: 1.4,
                       ),
                     ),
@@ -116,7 +119,7 @@ class _PrayerRequestPageState extends ConsumerState<PrayerRequestPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: AppColors.cardColor.withOpacity(0.5),
+                  color: AppColors.cardColor.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: SwitchListTile(
@@ -272,17 +275,29 @@ class _PrayerRequestPageState extends ConsumerState<PrayerRequestPage> {
           isAnonymous: _isAnonymous,
         ));
 
+        // Queda registrada en "Mis Solicitudes" (también en modo invitado).
+        await ref.read(submittedRequestsProvider.notifier).add(
+              type: SubmittedRequestType.prayer,
+              subject: _subjectController.text.trim(),
+              detail: _descriptionController.text.trim(),
+              isAnonymous: _isAnonymous,
+            );
+
         if (mounted) {
           _showSuccessDialog();
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error al enviar petición: $e'),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Text(
+                  ApiError.message(e, fallback: 'No pudimos enviar tu petición. Intenta de nuevo.'),
+                ),
+                backgroundColor: AppColors.error,
+              ),
+            );
         }
       } finally {
         if (mounted) {
@@ -305,7 +320,7 @@ class _PrayerRequestPageState extends ConsumerState<PrayerRequestPage> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.dorado.withOpacity(0.2),
+                color: AppColors.dorado.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.check_circle, color: AppColors.dorado, size: 48),
@@ -330,7 +345,7 @@ class _PrayerRequestPageState extends ConsumerState<PrayerRequestPage> {
               decoration: BoxDecoration(
                 color: AppColors.deepTeal,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.dorado.withOpacity(0.3)),
+                border: Border.all(color: AppColors.dorado.withValues(alpha: 0.3)),
               ),
               child: Text(
                 '"Por nada estéis afanosos, sino sean conocidas vuestras peticiones delante de Dios en toda oración y ruego." (Filipenses 4:6)',
@@ -346,8 +361,14 @@ class _PrayerRequestPageState extends ConsumerState<PrayerRequestPage> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(ctx); // Close dialog
-              Navigator.pop(context); // Return to connect page
+              Navigator.pop(ctx); // Cierra el diálogo
+              // Si la pantalla se abrió como destino inicial no hay nada que
+              // desapilar: se navega explícitamente a Conectar.
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go('/connect');
+              }
             },
             child: Text(
               'ACEPTAR',

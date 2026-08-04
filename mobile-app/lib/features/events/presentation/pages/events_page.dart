@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/utils/date_formatter.dart';
 import '../providers/events_provider.dart';
 import '../../data/models/event_model.dart';
 
@@ -253,7 +254,7 @@ class _LargeEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateOnly = event.startDate.split('T')[0];
+    final dateOnly = DateFormatter.longDate(event.startDate);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),

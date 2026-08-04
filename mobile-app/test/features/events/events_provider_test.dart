@@ -48,6 +48,24 @@ class FakeEventsRepository implements EventsRepository {
   Future<void> registerToEvent(int eventId) async {
     registerCalled = true;
   }
+
+  @override
+  Future<List<EventModel>> getMyRegisteredEvents() async {
+    return [
+      const EventModel(
+        id: 1,
+        title: 'Evento Test 1',
+        slug: 'evento-test-1',
+        description: 'Desc',
+        startDate: '2026-07-10T19:00:00Z',
+        endDate: '2026-07-10T21:00:00Z',
+        location: 'Templo',
+        requiresRegistration: true,
+        status: 'PUBLISHED',
+        isRegistered: true,
+      )
+    ];
+  }
 }
 
 void main() {

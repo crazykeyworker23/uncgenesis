@@ -67,7 +67,7 @@ class EventsNotifier extends StateNotifier<EventsState> {
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      final newEvents = await _repository.getEvents(
+      final pageEvents = await _repository.getEvents(
         page: state.page,
         filterType: state.selectedFilterType,
         searchQuery: state.searchQuery,
@@ -75,10 +75,14 @@ class EventsNotifier extends StateNotifier<EventsState> {
 
       if (requestToken != _currentRequestToken) return;
 
+      // `hasMore` se calcula sobre la página completa devuelta por el servidor
+      // y el filtro sólo afecta a lo que se muestra.
+      final visibleEvents = _applyDateFilter(pageEvents, state.selectedFilterType);
+
       state = state.copyWith(
-        events: [...state.events, ...newEvents],
+        events: [...state.events, ...visibleEvents],
         page: state.page + 1,
-        hasMore: newEvents.length >= 10,
+        hasMore: pageEvents.length >= 10,
         isLoading: false,
         clearError: true,
       );
@@ -91,6 +95,18 @@ class EventsNotifier extends StateNotifier<EventsState> {
         );
       }
     }
+  }
+
+  List<EventModel> _applyDateFilter(List<EventModel> events, String filterType) {
+    if (filterType != 'UPCOMING' && filterType != 'PAST') return events;
+
+    final now = DateTime.now();
+    return events.where((event) {
+      final startDate = DateTime.tryParse(event.startDate);
+      if (startDate == null) return false;
+      final localStart = startDate.isUtc ? startDate.toLocal() : startDate;
+      return filterType == 'UPCOMING' ? localStart.isAfter(now) : localStart.isBefore(now);
+    }).toList();
   }
 
   Future<void> setFilterType(String type) async {
@@ -141,4 +157,14 @@ final eventsProvider = StateNotifierProvider<EventsNotifier, EventsState>((ref) 
 final eventDetailProvider = FutureProvider.family<EventModel, String>((ref, slug) async {
   final repository = ref.watch(eventsRepositoryProvider);
   return repository.getEventDetail(slug);
+});
+
+/// Inscripciones del usuario autenticado.
+///
+/// Antes "Mis Inscripciones" filtraba la lista ya cargada en memoria, así que
+/// mostraba "no estás inscrito" si la pantalla de eventos no se había abierto
+/// o si la inscripción estaba en una página posterior.
+final myRegisteredEventsProvider = FutureProvider.autoDispose<List<EventModel>>((ref) async {
+  final repository = ref.watch(eventsRepositoryProvider);
+  return repository.getMyRegisteredEvents();
 });

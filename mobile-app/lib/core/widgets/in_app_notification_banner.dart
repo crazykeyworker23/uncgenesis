@@ -122,18 +122,18 @@ class _InAppNotificationBannerState extends State<InAppNotificationBanner>
           ),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: const Color(0xFFD4AF37).withOpacity(0.6), // Glowing Gold Accent
+            color: const Color(0xFFD4AF37).withValues(alpha: 0.6), // Glowing Gold Accent
             width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFD4AF37).withOpacity(0.25),
+              color: const Color(0xFFD4AF37).withValues(alpha: 0.25),
               blurRadius: 20,
               spreadRadius: 1,
               offset: const Offset(0, 4),
             ),
             BoxShadow(
-              color: Colors.black.withOpacity(0.6),
+              color: Colors.black.withValues(alpha: 0.6),
               blurRadius: 18,
               offset: const Offset(0, 8),
             ),
@@ -162,7 +162,7 @@ class _InAppNotificationBannerState extends State<InAppNotificationBanner>
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFF59E0B).withOpacity(0.4),
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
                           blurRadius: 10,
                           offset: const Offset(0, 2),
                         ),
@@ -206,7 +206,7 @@ class _InAppNotificationBannerState extends State<InAppNotificationBanner>
                             Text(
                               'ahora',
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.5),
+                                color: Colors.white.withValues(alpha: 0.5),
                                 fontSize: 10,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -229,7 +229,7 @@ class _InAppNotificationBannerState extends State<InAppNotificationBanner>
                         Text(
                           widget.body,
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.85),
+                            color: Colors.white.withValues(alpha: 0.85),
                             fontSize: 12,
                             height: 1.3,
                           ),
@@ -247,12 +247,12 @@ class _InAppNotificationBannerState extends State<InAppNotificationBanner>
                     child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.12),
+                        color: Colors.white.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         Icons.close_rounded,
-                        color: Colors.white.withOpacity(0.7),
+                        color: Colors.white.withValues(alpha: 0.7),
                         size: 16,
                       ),
                     ),

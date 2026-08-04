@@ -132,6 +132,24 @@ class ProfilePage extends ConsumerWidget {
                 icon: Icons.event_available_outlined,
                 onTap: () => context.push('/profile/my-events'),
               ),
+              const SizedBox(height: 12),
+              _ProfileMenuCard(
+                title: 'Mis Solicitudes',
+                icon: Icons.inbox_outlined,
+                onTap: () => context.push('/profile/my-requests'),
+              ),
+              const SizedBox(height: 12),
+              _ProfileMenuCard(
+                title: 'Notificaciones',
+                icon: Icons.notifications_none_outlined,
+                onTap: () => context.push('/notifications'),
+              ),
+              const SizedBox(height: 12),
+              _ProfileMenuCard(
+                title: 'Configuración',
+                icon: Icons.settings_outlined,
+                onTap: () => context.push('/settings'),
+              ),
               const SizedBox(height: 32),
 
               // 4. Logout Button
@@ -143,14 +161,52 @@ class ProfilePage extends ConsumerWidget {
                 ),
                 icon: const Icon(Icons.logout),
                 label: const Text('CERRAR SESIÓN', style: TextStyle(fontWeight: FontWeight.bold)),
-                onPressed: () {
-                  ref.read(authProvider.notifier).logout();
-                },
+                // Se confirma antes de cerrar: antes bastaba un toque
+                // accidental para perder la sesión.
+                onPressed: () => _confirmLogout(context, ref),
               ),
+              const SizedBox(height: 20),
             ],
           ),
         ),
         orElse: () => const _UnauthenticatedView(),
+      ),
+    );
+  }
+
+  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Cerrar sesión', style: AppTextStyles.titleMedium),
+        content: Text(
+          '¿Deseas cerrar tu sesión? Podrás seguir usando la app como invitado.',
+          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.crema),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCELAR', style: TextStyle(color: AppColors.crema)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('CERRAR SESIÓN', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await ref.read(authProvider.notifier).logout();
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Sesión cerrada. Continúas como invitado.'),
+        backgroundColor: AppColors.darkTeal,
       ),
     );
   }
@@ -239,40 +295,82 @@ class _ProfileMenuCard extends StatelessWidget {
   }
 }
 
+/// Vista del perfil en modo invitado.
+///
+/// Antes sólo mostraba el botón de iniciar sesión: todo lo que sí funciona sin
+/// cuenta (devocionales guardados, solicitudes enviadas, configuración) quedaba
+/// inaccesible desde aquí.
 class _UnauthenticatedView extends StatelessWidget {
   const _UnauthenticatedView();
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.account_circle_outlined, size: 72, color: AppColors.dorado),
-            const SizedBox(height: 16),
-            Text(
-              'Inicia sesión para gestionar tu cuenta',
-              style: AppTextStyles.titleLarge.copyWith(color: AppColors.doradoClaro),
-              textAlign: TextAlign.center,
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 12),
+          const Icon(Icons.account_circle_outlined, size: 72, color: AppColors.dorado),
+          const SizedBox(height: 16),
+          Text(
+            'Estás como invitado',
+            style: AppTextStyles.titleLarge.copyWith(color: AppColors.doradoClaro),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Al iniciar sesión podrás editar tu información personal, inscribirte a eventos y recibir avisos de la iglesia.',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.crema.withValues(alpha: 0.6)),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Al iniciar sesión podrás editar tu información personal, ver tus devocionales guardados y tus inscripciones a eventos.',
-              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.crema.withValues(alpha: 0.5)),
-              textAlign: TextAlign.center,
+            onPressed: () => context.push('/auth/login'),
+            child: const Text('INICIAR SESIÓN', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.dorado,
+              side: const BorderSide(color: AppColors.dorado),
+              padding: const EdgeInsets.symmetric(vertical: 14),
             ),
-            const SizedBox(height: 28),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-              ),
-              onPressed: () => context.push('/auth/login'),
-              child: const Text('INICIAR SESIÓN', style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () => context.push('/auth/register'),
+            child: const Text('CREAR CUENTA', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 32),
+
+          Text(
+            'DISPONIBLE SIN CUENTA',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.doradoClaro,
+              letterSpacing: 1.2,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          _ProfileMenuCard(
+            title: 'Devocionales Guardados',
+            icon: Icons.star_border,
+            onTap: () => context.push('/profile/saved-devotionals'),
+          ),
+          const SizedBox(height: 12),
+          _ProfileMenuCard(
+            title: 'Mis Solicitudes',
+            icon: Icons.inbox_outlined,
+            onTap: () => context.push('/profile/my-requests'),
+          ),
+          const SizedBox(height: 12),
+          _ProfileMenuCard(
+            title: 'Configuración',
+            icon: Icons.settings_outlined,
+            onTap: () => context.push('/settings'),
+          ),
+          const SizedBox(height: 24),
+        ],
       ),
     );
   }

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -65,8 +64,17 @@ final notificationsRepositoryProvider = Provider<NotificationsRepository>((ref) 
 
 class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> {
   static const _key = 'local_push_notifications';
+
+  /// Antes se consultaba al servidor cada 5 segundos (y con dos peticiones por
+  /// ciclo), lo que consumía batería y datos sin necesidad.
+  static const _syncInterval = Duration(seconds: 30);
+
   Timer? _syncTimer;
   bool _isFirstSync = true;
+  bool _isSyncing = false;
+  String? _cachedUserId;
+  String? _cachedUserIdForToken;
+  dynamic _dio;
 
   LocalNotificationsNotifier() : super([]) {
     _loadFromPrefs();
@@ -76,6 +84,21 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
   void dispose() {
     _syncTimer?.cancel();
     super.dispose();
+  }
+
+  /// Cantidad de notificaciones sin leer (usada por el badge del inicio).
+  int get unreadCount => state.where((n) => !n.isRead).length;
+
+  /// Al iniciar o cerrar sesión el historial deja de ser válido: se limpia la
+  /// caché de identidad y se vuelve a consultar de inmediato.
+  void resetForSessionChange() {
+    _cachedUserId = null;
+    _cachedUserIdForToken = null;
+    _isFirstSync = true;
+    state = [];
+    if (_dio != null) {
+      fetchRemoteNotifications(_dio);
+    }
   }
 
   Future<void> _loadFromPrefs() async {
@@ -91,21 +114,28 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
   }
 
   void startAutoSync(dynamic dio) {
-    _syncTimer?.cancel();
+    _dio = dio;
+    // Evita reiniciar el temporizador en cada reconstrucción de la pantalla.
+    if (_syncTimer?.isActive ?? false) return;
     fetchRemoteNotifications(dio);
-    _syncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _syncTimer = Timer.periodic(_syncInterval, (_) {
       fetchRemoteNotifications(dio);
     });
   }
 
   Future<void> fetchRemoteNotifications(dynamic dio) async {
+    if (_isSyncing) return;
+    _isSyncing = true;
+    _dio = dio;
     try {
       // 1. Verificar si el usuario ha iniciado sesion leyendo el token seguro
       const storage = FlutterSecureStorage();
       final token = await storage.read(key: 'access_token');
-      
+
       // Si NO hay token (modo invitado / sin iniciar sesion), NO recibir ni mostrar notificaciones
       if (token == null || token.isEmpty) {
+        _cachedUserId = null;
+        _cachedUserIdForToken = null;
         if (state.isNotEmpty) {
           state = [];
           final prefs = await SharedPreferences.getInstance();
@@ -114,14 +144,18 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
         return;
       }
 
-      // 2. Obtener el ID del usuario actualmente autenticado para doble validación estricta
-      String? currentUserId;
-      try {
-        final meResponse = await dio.get('/users/me/');
-        if (meResponse.statusCode == 200 && meResponse.data != null) {
-          currentUserId = meResponse.data['id']?.toString();
-        }
-      } catch (_) {}
+      // 2. Obtener el ID del usuario autenticado para la validación estricta.
+      //    Se cachea por token: sólo se vuelve a pedir si la sesión cambió.
+      if (_cachedUserId == null || _cachedUserIdForToken != token) {
+        try {
+          final meResponse = await dio.get('/users/me/');
+          if (meResponse.statusCode == 200 && meResponse.data != null) {
+            _cachedUserId = meResponse.data['id']?.toString();
+            _cachedUserIdForToken = token;
+          }
+        } catch (_) {}
+      }
+      final currentUserId = _cachedUserId;
 
       final prefs = await SharedPreferences.getInstance();
       final deletedIds = (prefs.getStringList('deleted_notification_ids') ?? []).toSet();
@@ -130,6 +164,9 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
       final results = response.data['results'] ?? response.data;
       if (results is List) {
         final existingIds = state.map((n) => n.id).toSet();
+        // Conservar cuáles ya fueron leídas: antes cada sincronización las
+        // volvía a marcar como no leídas y el badge nunca bajaba a cero.
+        final readIds = state.where((n) => n.isRead).map((n) => n.id).toSet();
         final List<LocalNotification> fetched = [];
         bool hasNew = false;
         LocalNotification? newestNotification;
@@ -158,7 +195,7 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
             title: title,
             body: body,
             receivedAt: created,
-            isRead: false,
+            isRead: readIds.contains(id),
           );
 
           if (!existingIds.contains(id)) {
@@ -178,9 +215,14 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
             newestNotification.body,
           );
 
-          final navState = NotificationService.navigatorKey.currentState;
+          // Se usa la clave del navegador realmente montado por la app; la
+          // clave estática por defecto nunca se adjunta a un Navigator y el
+          // banner jamás llegaba a mostrarse.
+          final navState = NotificationService().activeNavigatorKey.currentState;
           final context = navState?.context;
-          if (context != null) {
+          // El contexto se obtiene después de varias llamadas asíncronas: sólo
+          // se usa si el navegador sigue montado.
+          if (context != null && context.mounted) {
             InAppNotificationBanner.show(
               context,
               overlay: navState?.overlay,
@@ -191,7 +233,12 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
         }
         _isFirstSync = false;
       }
-    } catch (_) {}
+    } catch (_) {
+      // Sincronización silenciosa: no interrumpimos al usuario por un fallo
+      // temporal de red; el siguiente ciclo lo reintenta.
+    } finally {
+      _isSyncing = false;
+    }
   }
 
   Future<void> markAsRead(String id) async {

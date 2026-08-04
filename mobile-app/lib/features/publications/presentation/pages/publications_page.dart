@@ -6,6 +6,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/utils/date_formatter.dart';
+import '../../../notifications/presentation/providers/notifications_provider.dart';
 import '../providers/publications_provider.dart';
 import '../../data/models/publication_model.dart';
 
@@ -54,6 +56,7 @@ class _PublicationsPageState extends ConsumerState<PublicationsPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(publicationsProvider);
+    final unreadCount = ref.watch(localNotificationsProvider).where((n) => !n.isRead).length;
 
     final contentTypes = [
       {'label': 'Todas', 'value': 'ALL'},
@@ -109,25 +112,29 @@ class _PublicationsPageState extends ConsumerState<PublicationsPage> {
                           color: AppColors.dorado,
                           size: 28,
                         ),
-                        Positioned(
-                          top: -2,
-                          right: -2,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Colors.redAccent,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Text(
-                              '3',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
+                        // Contador real de no leídas (antes fijo en "3").
+                        if (unreadCount > 0)
+                          Positioned(
+                            top: -4,
+                            right: -4,
+                            child: Container(
+                              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                unreadCount > 99 ? '99+' : '$unreadCount',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -448,9 +455,9 @@ class _HorizontalPublicationCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      publication.publishedAt != null
-                          ? publication.publishedAt!.split('T')[0]
-                          : '25 de mayo, 2025',
+                      // Antes, sin fecha real, se mostraba una fecha inventada
+                      // fija ("25 de mayo, 2025") que confundía al lector.
+                      DateFormatter.fullDate(publication.publishedAt, fallback: 'Sin fecha'),
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.crema.withValues(alpha: 0.5),
                         fontSize: 11,

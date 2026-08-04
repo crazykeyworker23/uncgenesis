@@ -105,7 +105,7 @@ class MainShellLayout extends StatelessWidget {
                       children: [
                         Icon(
                           isSelected ? item.activeIcon : item.icon,
-                          color: isSelected ? AppColors.dorado : AppColors.crema.withOpacity(0.5),
+                          color: isSelected ? AppColors.dorado : AppColors.crema.withValues(alpha: 0.5),
                           size: 24,
                         ),
                         const SizedBox(height: 2),
@@ -115,7 +115,7 @@ class MainShellLayout extends StatelessWidget {
                             fontFamily: 'Outfit',
                             fontSize: 11,
                             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            color: isSelected ? AppColors.dorado : AppColors.crema.withOpacity(0.5),
+                            color: isSelected ? AppColors.dorado : AppColors.crema.withValues(alpha: 0.5),
                           ),
                         ),
                         const SizedBox(height: 4),

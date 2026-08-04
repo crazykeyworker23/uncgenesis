@@ -1,22 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/providers/core_providers.dart';
+import '../../../../core/utils/date_formatter.dart';
 import '../../../../app/theme/app_colors.dart';
-import '../../../../app/theme/app_text_styles.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/notifications_provider.dart';
 
-class NotificationsPage extends ConsumerWidget {
+class NotificationsPage extends ConsumerStatefulWidget {
   const NotificationsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final notifications = ref.watch(localNotificationsProvider);
-    final apiClient = ref.watch(apiClientProvider);
+  ConsumerState<NotificationsPage> createState() => _NotificationsPageState();
+}
 
+class _NotificationsPageState extends ConsumerState<NotificationsPage> {
+  @override
+  void initState() {
+    super.initState();
+    // La sincronización se pedía dentro de `build`: cada respuesta cambiaba el
+    // estado, provocaba otra reconstrucción y otra petición, dejando la
+    // pantalla consultando al servidor sin parar.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(localNotificationsProvider.notifier).fetchRemoteNotifications(apiClient.dio);
+      if (!mounted) return;
+      ref.read(localNotificationsProvider.notifier).fetchRemoteNotifications(
+            ref.read(apiClientProvider).dio,
+          );
     });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final notifications = ref.watch(localNotificationsProvider);
+    final isGuest = ref.watch(authProvider).isGuest;
 
     return Scaffold(
       backgroundColor: const Color(0xFF090D16), // Deep Dark Obsidian Background
@@ -60,16 +77,16 @@ class NotificationsPage extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B).withOpacity(0.4),
+                      color: const Color(0xFF1E293B).withValues(alpha: 0.4),
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.3), width: 1.5),
+                      border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3), width: 1.5),
                     ),
                     child: const Icon(Icons.notifications_off_outlined, size: 52, color: Color(0xFFF59E0B)),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    'Sin notificaciones personales',
-                    style: TextStyle(
+                  Text(
+                    isGuest ? 'Notificaciones no disponibles' : 'Sin notificaciones personales',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -79,15 +96,31 @@ class NotificationsPage extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 36),
                     child: Text(
-                      'Las notificaciones enviadas a tu cuenta aparecerán aquí en tiempo real.',
+                      // En modo invitado no hay cuenta a la que enviar avisos:
+                      // se explica en vez de dejar una pantalla vacía sin motivo.
+                      isGuest
+                          ? 'Inicia sesión para recibir los avisos y comunicados que la iglesia envía a tu cuenta.'
+                          : 'Las notificaciones enviadas a tu cuenta aparecerán aquí en tiempo real.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.55),
+                        color: Colors.white.withValues(alpha: 0.55),
                         fontSize: 13,
                         height: 1.45,
                       ),
                     ),
                   ),
+                  if (isGuest) ...[
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF59E0B),
+                        foregroundColor: const Color(0xFF0F172A),
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                      ),
+                      onPressed: () => context.push('/auth/login'),
+                      child: const Text('INICIAR SESIÓN', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
                 ],
               ),
             )
@@ -96,22 +129,10 @@ class NotificationsPage extends ConsumerWidget {
               itemCount: notifications.length,
               itemBuilder: (context, index) {
                 final notif = notifications[index];
-                String dateOnly = notif.receivedAt;
-                String timeOnly = '';
-
-                if (notif.receivedAt.contains('T')) {
-                  final parts = notif.receivedAt.split('T');
-                  dateOnly = parts[0];
-                  if (parts.length > 1 && parts[1].length >= 5) {
-                    timeOnly = parts[1].substring(0, 5);
-                  }
-                } else if (notif.receivedAt.contains(' ')) {
-                  final parts = notif.receivedAt.split(' ');
-                  dateOnly = parts[0];
-                  if (parts.length > 1 && parts[1].length >= 5) {
-                    timeOnly = parts[1].substring(0, 5);
-                  }
-                }
+                // Fecha y hora en formato local y legible; antes se mostraba
+                // el texto ISO en UTC tal cual venía del servidor.
+                final dateOnly = DateFormatter.relative(notif.receivedAt, fallback: '');
+                final timeOnly = DateFormatter.time(notif.receivedAt) ?? '';
 
                 final isRead = notif.isRead;
 
@@ -126,7 +147,7 @@ class NotificationsPage extends ConsumerWidget {
                     padding: const EdgeInsets.only(right: 22),
                     margin: const EdgeInsets.only(bottom: 14),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.85),
+                      color: AppColors.error.withValues(alpha: 0.85),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: const Row(
@@ -154,20 +175,20 @@ class NotificationsPage extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isRead
-                            ? Colors.white.withOpacity(0.08)
-                            : const Color(0xFFF59E0B).withOpacity(0.55),
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : const Color(0xFFF59E0B).withValues(alpha: 0.55),
                         width: isRead ? 1 : 1.5,
                       ),
                       boxShadow: [
                         if (!isRead)
                           BoxShadow(
-                            color: const Color(0xFFF59E0B).withOpacity(0.18),
+                            color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
                             blurRadius: 16,
                             spreadRadius: 0,
                             offset: const Offset(0, 4),
                           ),
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.45),
+                          color: Colors.black.withValues(alpha: 0.45),
                           blurRadius: 12,
                           offset: const Offset(0, 6),
                         ),
@@ -207,7 +228,7 @@ class NotificationsPage extends ConsumerWidget {
                                       boxShadow: [
                                         if (!isRead)
                                           BoxShadow(
-                                            color: const Color(0xFFF59E0B).withOpacity(0.35),
+                                            color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
                                             blurRadius: 8,
                                             offset: const Offset(0, 2),
                                           ),
@@ -251,7 +272,7 @@ class NotificationsPage extends ConsumerWidget {
                                               Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFFF59E0B).withOpacity(0.18),
+                                                  color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
                                                   borderRadius: BorderRadius.circular(6),
                                                   border: Border.all(color: const Color(0xFFF59E0B), width: 0.8),
                                                 ),
@@ -272,7 +293,7 @@ class NotificationsPage extends ConsumerWidget {
                                           timeOnly.isNotEmpty ? '$dateOnly • $timeOnly' : dateOnly,
                                           style: TextStyle(
                                             fontSize: 11,
-                                            color: Colors.white.withOpacity(0.45),
+                                            color: Colors.white.withValues(alpha: 0.45),
                                             fontWeight: FontWeight.w500,
                                           ),
                                         ),
@@ -288,13 +309,13 @@ class NotificationsPage extends ConsumerWidget {
                                     child: Container(
                                       padding: const EdgeInsets.all(6),
                                       decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.08),
+                                        color: Colors.white.withValues(alpha: 0.08),
                                         shape: BoxShape.circle,
                                       ),
                                       child: Icon(
                                         Icons.close_rounded,
                                         size: 16,
-                                        color: Colors.white.withOpacity(0.5),
+                                        color: Colors.white.withValues(alpha: 0.5),
                                       ),
                                     ),
                                   ),
@@ -318,7 +339,7 @@ class NotificationsPage extends ConsumerWidget {
                               Text(
                                 notif.body,
                                 style: TextStyle(
-                                  color: isRead ? Colors.white.withOpacity(0.65) : const Color(0xFFE2E8F0),
+                                  color: isRead ? Colors.white.withValues(alpha: 0.65) : const Color(0xFFE2E8F0),
                                   fontSize: 13.5,
                                   height: 1.45,
                                 ),

@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/utils/date_formatter.dart';
 import '../providers/devotionals_provider.dart';
 import '../../data/models/devotional_model.dart';
 
@@ -15,20 +16,42 @@ class DevotionalDetailPage extends ConsumerWidget {
     required this.slug,
   });
 
-  Future<void> _playAudio(BuildContext context, String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se pudo abrir el enlace del audio.'),
-            backgroundColor: AppColors.error,
+  void _toggleSave(BuildContext context, WidgetRef ref, bool wasSaved) {
+    ref.read(savedDevotionalsProvider.notifier).toggleFavorite(slug);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            wasSaved
+                ? 'Devocional quitado de guardados.'
+                : 'Devocional guardado. Lo encontrarás en tu perfil.',
           ),
+          backgroundColor: wasSaved ? AppColors.darkTeal : AppColors.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
+
+  Future<void> _playAudio(BuildContext context, String url) async {
+    if (url.trim().isNotEmpty) {
+      try {
+        final launched = await launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.externalApplication,
         );
+        if (launched || !context.mounted) return;
+      } catch (_) {
+        if (!context.mounted) return;
       }
     }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('No se pudo abrir el enlace del audio.'),
+        backgroundColor: AppColors.error,
+      ),
+    );
   }
 
   @override
@@ -42,13 +65,14 @@ class DevotionalDetailPage extends ConsumerWidget {
         title: const Text('Devocional Diario'),
         actions: [
           IconButton(
+            tooltip: isSaved ? 'Quitar de guardados' : 'Guardar devocional',
             icon: Icon(
               isSaved ? Icons.star : Icons.star_border,
               color: isSaved ? AppColors.dorado : AppColors.crema,
             ),
-            onPressed: () {
-              ref.read(savedDevotionalsProvider.notifier).toggleFavorite(slug);
-            },
+            // Guardar es una acción silenciosa: sin confirmación no quedaba
+            // claro que el devocional se había añadido a "Guardados".
+            onPressed: () => _toggleSave(context, ref, isSaved),
           ),
         ],
       ),
@@ -56,9 +80,7 @@ class DevotionalDetailPage extends ConsumerWidget {
         data: (devotional) => _DevotionalDetailBody(
           devotional: devotional,
           isSaved: isSaved,
-          onToggleSave: () {
-            ref.read(savedDevotionalsProvider.notifier).toggleFavorite(slug);
-          },
+          onToggleSave: () => _toggleSave(context, ref, isSaved),
           onPlayAudio: () => _playAudio(context, devotional.audioUrl ?? ''),
         ),
         loading: () => const Center(
@@ -106,7 +128,7 @@ class _DevotionalDetailBody extends StatelessWidget {
         children: [
           // 1. Header (Date & Title)
           Text(
-            devotional.date,
+            DateFormatter.fullDate(devotional.date, fallback: 'Devocional').toUpperCase(),
             style: AppTextStyles.bodySmall.copyWith(
               color: AppColors.crema.withValues(alpha: 0.5),
               fontWeight: FontWeight.w600,
@@ -148,7 +170,7 @@ class _DevotionalDetailBody extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'AUDIODE VOCIONAL DISPONIBLE',
+                            'AUDIO DEVOCIONAL DISPONIBLE',
                             style: TextStyle(
                               color: AppColors.doradoClaro,
                               fontWeight: FontWeight.bold,
