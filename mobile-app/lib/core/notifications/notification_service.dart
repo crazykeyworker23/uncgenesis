@@ -4,7 +4,6 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../network/api_client.dart';
@@ -175,22 +174,14 @@ class NotificationService {
     }
   }
 
+  /// Registra el dispositivo en el backend para poder recibir avisos.
+  ///
+  /// `POST /notifications/devices/` es público a propósito: el modelo FCMDevice
+  /// admite `user` nulo para que un invitado también quede registrado. Si hay
+  /// sesión iniciada, el interceptor añade el token y el dispositivo queda
+  /// asociado a esa cuenta.
   Future<void> registerToken([String? explicitToken]) async {
     if (_apiClient == null) return;
-
-    // `/notifications/devices/` exige sesión iniciada. En modo invitado la
-    // llamada sólo generaba un 401 en cada arranque.
-    try {
-      const storage = FlutterSecureStorage();
-      final accessToken = await storage.read(key: 'access_token');
-      if (accessToken == null || accessToken.isEmpty) {
-        debugPrint('Modo invitado: se omite el registro del dispositivo FCM.');
-        return;
-      }
-    } catch (e) {
-      debugPrint('No se pudo verificar la sesión antes de registrar el token: $e');
-      return;
-    }
 
     String? token = explicitToken;
     if (token == null || token.isEmpty) {
