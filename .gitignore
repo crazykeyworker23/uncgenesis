@@ -108,6 +108,12 @@ mobile-app/assets/images/temp/
 mobile-app/*.lock
 mobile-app/pubspec.lock.backup
 
+# Binarios compilados de la app: pesan ~63 MB cada uno y no deben versionarse.
+# Se distribuyen por la tienda o el canal de descarga, no por el repositorio.
+*.apk
+*.aab
+*.ipa
+
 # Backup and temp files
 *~
 *.bak
