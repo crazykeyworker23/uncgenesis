@@ -37,6 +37,16 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         except Exception:
             avatar_url = None
 
+        # El alcance de la sesión viaja con el login para que el panel web sepa
+        # de inmediato qué módulos habilitar y si la cuenta puede entrar
+        # siquiera (los miembros de la comunidad usan sólo la app móvil).
+        from apps.roles.utils import (
+            can_access_admin_panel,
+            get_user_permissions,
+            get_user_role_names,
+            is_superadmin,
+        )
+
         data['user'] = {
             'id': user.id,
             'email': getattr(user, 'email', ''),
@@ -48,6 +58,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'bio': getattr(user, 'bio', '') or '',
             'status': getattr(user, 'status', 'ACTIVE'),
             'avatar': avatar_url,
+            'roles': sorted(get_user_role_names(user)),
+            'permissions': sorted(get_user_permissions(user)),
+            'is_superadmin': is_superadmin(user),
+            'can_access_admin': can_access_admin_panel(user),
         }
         return data
 
@@ -102,7 +116,42 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 
 class UserMeSerializer(serializers.ModelSerializer):
+    # El panel administrativo necesita conocer el alcance de la sesión para
+    # mostrar sólo los módulos que el rol puede gestionar. Antes no se exponía
+    # nada de esto y la web enseñaba el menú completo a cualquiera.
+    roles = serializers.SerializerMethodField(read_only=True)
+    permissions = serializers.SerializerMethodField(read_only=True)
+    is_superadmin = serializers.SerializerMethodField(read_only=True)
+    can_access_admin = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = User
-        fields = ('id', 'email', 'first_name', 'last_name', 'full_name', 'phone', 'avatar', 'location', 'bio', 'status', 'created_at')
-        read_only_fields = ('id', 'email', 'full_name', 'status', 'created_at')
+        fields = (
+            'id', 'email', 'first_name', 'last_name', 'full_name', 'phone',
+            'avatar', 'location', 'bio', 'status', 'created_at',
+            'roles', 'permissions', 'is_superadmin', 'can_access_admin',
+        )
+        read_only_fields = (
+            'id', 'email', 'full_name', 'status', 'created_at',
+            'roles', 'permissions', 'is_superadmin', 'can_access_admin',
+        )
+
+    def get_roles(self, obj):
+        from apps.roles.utils import get_user_role_names
+
+        return sorted(get_user_role_names(obj))
+
+    def get_permissions(self, obj):
+        from apps.roles.utils import get_user_permissions
+
+        return sorted(get_user_permissions(obj))
+
+    def get_is_superadmin(self, obj):
+        from apps.roles.utils import is_superadmin
+
+        return is_superadmin(obj)
+
+    def get_can_access_admin(self, obj):
+        from apps.roles.utils import can_access_admin_panel
+
+        return can_access_admin_panel(obj)

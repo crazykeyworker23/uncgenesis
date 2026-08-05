@@ -14,8 +14,12 @@ class HasAppPermission(BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
 
-        # 2. El superusuario tiene permisos totales automáticamente
-        if request.user.is_superuser:
+        # 2. El superadministrador tiene permisos totales automáticamente.
+        #    Se reconoce por la marca de Django o por el rol SUPERADMIN, para
+        #    que asignar el rol desde el panel conceda realmente control total.
+        from apps.roles.utils import is_superadmin
+
+        if is_superadmin(request.user):
             return True
 
         # 3. Obtener el permiso requerido desde la vista

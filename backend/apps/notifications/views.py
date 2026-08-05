@@ -47,8 +47,12 @@ class NotificationViewSet(viewsets.ModelViewSet):
         if not user or not user.is_authenticated:
             return qs.none()
 
-        # Superusuario en Panel Web (listado admin_view, borrado, edicion o envio manual):
-        if user.is_superuser and (self.request.query_params.get('admin_view') == 'true' or self.action in ['destroy', 'update', 'partial_update', 'send_now']):
+        # Superadministrador en Panel Web (listado admin_view, borrado, edicion
+        # o envio manual). Se usa is_superadmin para que el rol SUPERADMIN
+        # asignado desde el panel tenga el mismo alcance que la marca de Django.
+        from apps.roles.utils import is_superadmin
+
+        if is_superadmin(user) and (self.request.query_params.get('admin_view') == 'true' or self.action in ['destroy', 'update', 'partial_update', 'send_now']):
             return qs.all()
 
         # Para el feed de la App Movil:

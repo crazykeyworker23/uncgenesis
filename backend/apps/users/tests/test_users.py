@@ -89,15 +89,59 @@ class TestUserAdministration:
             'first_name': 'Roberto',
             'last_name': 'Gomez',
             'phone': '+51987654321',
+            'password': 'Genesis.2026.Segura',
             'assigned_roles': [RoleType.ADMIN]
         }
         res = admin_client.post(USERS_LIST, payload, format='json')
         assert res.status_code == status.HTTP_201_CREATED
-        
+
         user = User.objects.get(email='new_leader@genesisapp.org')
         assert user.first_name == 'Roberto'
         # Verify role relation exists
         assert UserRole.objects.filter(user=user, role__name=RoleType.ADMIN).exists()
+        # La credencial definida debe quedar activa y nunca devolverse
+        assert user.check_password('Genesis.2026.Segura')
+        assert 'password' not in res.data
+
+    def test_create_user_requires_explicit_password(self, admin_client, manager_role):
+        """
+        Crear una cuenta sin contraseña debe fallar.
+
+        Antes se asignaba en silencio una contraseña fija e identica para todas
+        las cuentas creadas desde el panel.
+        """
+        payload = {
+            'email': 'sin_clave@genesisapp.org',
+            'first_name': 'Sin',
+            'last_name': 'Clave',
+        }
+        res = admin_client.post(USERS_LIST, payload, format='json')
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert not User.objects.filter(email='sin_clave@genesisapp.org').exists()
+
+    def test_create_user_rejects_weak_password(self, admin_client):
+        """Las contraseñas pasan por los validadores de Django."""
+        payload = {
+            'email': 'debil@genesisapp.org',
+            'password': '123',
+        }
+        res = admin_client.post(USERS_LIST, payload, format='json')
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'password' in res.data
+
+    def test_admin_can_reset_user_password(self, admin_client, create_user):
+        """El administrador actualiza credenciales sin conocer la anterior."""
+        target = create_user(email="olvidadizo@genesisapp.org")
+
+        res = admin_client.post(
+            f"{USERS_LIST}{target.id}/set-password/",
+            {'password': 'Nueva.Clave.2026'},
+            format='json'
+        )
+        assert res.status_code == status.HTTP_200_OK
+
+        target.refresh_from_db()
+        assert target.check_password('Nueva.Clave.2026')
 
     def test_update_user_roles(self, admin_client, create_user, manager_role, leader_role):
         """Admins can update user profile and modify their assigned roles."""
