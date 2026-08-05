@@ -18,30 +18,43 @@ import {
   Search,
   ChevronDown
 } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
+import type { LucideIcon } from 'lucide-react';
+import { useAuthStore, usePermissions } from '../store/authStore';
+import { ADMIN_MODULES } from '../config/modules';
 import { Logo } from '../components/ui/Logo';
+
+const MODULE_ICONS: Record<string, LucideIcon> = {
+  '/dashboard': LayoutDashboard,
+  '/publicaciones': BookOpen,
+  '/servicios': MessageSquare,
+  '/devocionales': BookOpen,
+  '/celulas': Users,
+  '/eventos': Calendar,
+  '/notificaciones': Bell,
+  '/solicitudes': MessageSquare,
+  '/usuarios': UserSquare2,
+  '/roles': ShieldCheck,
+  '/multimedia': ImageIcon,
+  '/reportes': BarChart3,
+  '/configuracion': Settings,
+};
 
 export const AdminLayout: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuthStore();
+  const { can } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
-  const menuItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Publicaciones', path: '/publicaciones', icon: BookOpen },
-    { name: 'Servicios', path: '/servicios', icon: MessageSquare },
-    { name: 'Devocionales', path: '/devocionales', icon: BookOpen },
-    { name: 'Células', path: '/celulas', icon: Users },
-    { name: 'Eventos', path: '/eventos', icon: Calendar },
-    { name: 'Notificaciones', path: '/notificaciones', icon: Bell },
-    { name: 'Solicitudes', path: '/solicitudes', icon: MessageSquare },
-    { name: 'Usuarios', path: '/usuarios', icon: UserSquare2 },
-    { name: 'Roles y Permisos', path: '/roles', icon: ShieldCheck },
-    { name: 'Biblioteca', path: '/multimedia', icon: ImageIcon },
-    { name: 'Reportes', path: '/reportes', icon: BarChart3 },
-    { name: 'Configuración', path: '/configuracion', icon: Settings },
-  ];
+  // El menú se arma con lo que el rol puede gestionar. Antes se mostraban las
+  // 13 secciones a cualquiera y el backend respondía 403 al entrar.
+  const menuItems = ADMIN_MODULES
+    .filter((mod) => can(mod.permission))
+    .map((mod) => ({
+      name: mod.name,
+      path: mod.path,
+      icon: MODULE_ICONS[mod.path] ?? LayoutDashboard,
+    }));
 
   return (
     <div className="flex h-screen overflow-hidden bg-deep-teal text-crema">

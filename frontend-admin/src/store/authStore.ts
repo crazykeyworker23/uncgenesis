@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-interface UserProfile {
+export interface UserProfile {
   id: number;
   email: string;
   first_name: string;
@@ -12,6 +12,14 @@ interface UserProfile {
   location: string;
   bio: string;
   status: string;
+  /** Roles asignados (SUPERADMIN, CELL_LEADER, ...). */
+  roles?: string[];
+  /** Permisos efectivos: deciden qué módulos ve esta sesión. */
+  permissions?: string[];
+  /** Control total del sistema. */
+  is_superadmin?: boolean;
+  /** Si la cuenta puede operar el panel web. */
+  can_access_admin?: boolean;
 }
 
 interface AuthState {
@@ -22,6 +30,7 @@ interface AuthState {
   login: (user: UserProfile, access: string, refresh: string) => void;
   logout: () => void;
   updateAccessToken: (access: string) => void;
+  setUser: (user: UserProfile) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -45,10 +54,45 @@ export const useAuthStore = create<AuthState>()(
       }),
       updateAccessToken: (access) => set({
         accessToken: access
-      })
+      }),
+      // Refresca el perfil sin tocar los tokens: si un superadministrador
+      // cambia los roles de alguien, su alcance se actualiza al recargar.
+      setUser: (user) => set({ user })
     }),
     {
       name: 'genesis-auth-store', // key in localStorage
     }
   )
 );
+
+/**
+ * Indica si la sesión activa puede ejercer un permiso.
+ *
+ * El superadministrador siempre puede: así, un permiso nuevo queda cubierto
+ * sin tener que enumerarlo en ningún sitio.
+ */
+export function userHasPermission(
+  user: UserProfile | null,
+  permission?: string | string[]
+): boolean {
+  if (!user) return false;
+  if (user.is_superadmin) return true;
+  if (!permission) return true;
+
+  const required = Array.isArray(permission) ? permission : [permission];
+  if (required.length === 0) return true;
+
+  const granted = user.permissions ?? [];
+  return required.some((code) => granted.includes(code));
+}
+
+/** Hook de conveniencia para consultar permisos dentro de un componente. */
+export function usePermissions() {
+  const user = useAuthStore((state) => state.user);
+
+  return {
+    user,
+    isSuperadmin: Boolean(user?.is_superadmin),
+    can: (permission?: string | string[]) => userHasPermission(user, permission),
+  };
+}

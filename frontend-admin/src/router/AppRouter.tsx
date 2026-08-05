@@ -33,52 +33,95 @@ export default function AppRouter() {
       <Route path="/login" element={<Login />} />
       
       {/* Protected Routes */}
+      {/* Cada sección declara su permiso: escribir la URL a mano tampoco da
+          acceso a lo que el rol no puede gestionar. */}
       <Route element={<ProtectedRoute />}>
         <Route element={<AdminLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
-          
+
           {/* Publications Routes */}
-          <Route path="/publicaciones" element={<PublicationList />} />
-          <Route path="/publicaciones/nueva" element={<PublicationForm />} />
-          <Route path="/publicaciones/:id/editar" element={<PublicationForm />} />
-          
+          <Route element={<ProtectedRoute permission="PUBLICATIONS_VIEW" />}>
+            <Route path="/publicaciones" element={<PublicationList />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={['PUBLICATIONS_CREATE', 'PUBLICATIONS_EDIT']} />}>
+            <Route path="/publicaciones/nueva" element={<PublicationForm />} />
+            <Route path="/publicaciones/:id/editar" element={<PublicationForm />} />
+          </Route>
+
           {/* Services Routes */}
-          <Route path="/servicios" element={<ServiceList />} />
-          <Route path="/servicios/nuevo" element={<ServiceForm />} />
-          <Route path="/servicios/:id/editar" element={<ServiceForm />} />
-          
+          <Route element={<ProtectedRoute permission="SERVICES_VIEW" />}>
+            <Route path="/servicios" element={<ServiceList />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={['SERVICES_CREATE', 'SERVICES_EDIT']} />}>
+            <Route path="/servicios/nuevo" element={<ServiceForm />} />
+            <Route path="/servicios/:id/editar" element={<ServiceForm />} />
+          </Route>
+
           {/* Devotionals Routes */}
-          <Route path="/devocionales" element={<DevotionalList />} />
-          <Route path="/devocionales/nuevo" element={<DevotionalForm />} />
-          <Route path="/devocionales/:id/editar" element={<DevotionalForm />} />
-          
+          <Route element={<ProtectedRoute permission="DEVOTIONALS_VIEW" />}>
+            <Route path="/devocionales" element={<DevotionalList />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={['DEVOTIONALS_CREATE', 'DEVOTIONALS_EDIT']} />}>
+            <Route path="/devocionales/nuevo" element={<DevotionalForm />} />
+            <Route path="/devocionales/:id/editar" element={<DevotionalForm />} />
+          </Route>
+
           {/* Events Routes */}
-          <Route path="/eventos" element={<EventList />} />
-          <Route path="/eventos/nuevo" element={<EventForm />} />
-          <Route path="/eventos/:id/editar" element={<EventForm />} />
+          <Route element={<ProtectedRoute permission="EVENTS_VIEW" />}>
+            <Route path="/eventos" element={<EventList />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={['EVENTS_CREATE', 'EVENTS_EDIT']} />}>
+            <Route path="/eventos/nuevo" element={<EventForm />} />
+            <Route path="/eventos/:id/editar" element={<EventForm />} />
+          </Route>
+
           {/* Cells Routes */}
-          <Route path="/celulas" element={<CellList />} />
-          <Route path="/celulas/nueva" element={<CellForm />} />
-          <Route path="/celulas/:id/editar" element={<CellForm />} />
+          <Route element={<ProtectedRoute permission="CELLS_VIEW" />}>
+            <Route path="/celulas" element={<CellList />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={['CELLS_CREATE', 'CELLS_EDIT']} />}>
+            <Route path="/celulas/nueva" element={<CellForm />} />
+            <Route path="/celulas/:id/editar" element={<CellForm />} />
+          </Route>
+
           {/* Notifications Routes */}
-          <Route path="/notificaciones" element={<NotificationList />} />
-          <Route path="/notificaciones/nueva" element={<NotificationForm />} />
+          <Route element={<ProtectedRoute permission="NOTIFICATIONS_VIEW" />}>
+            <Route path="/notificaciones" element={<NotificationList />} />
+          </Route>
+          <Route element={<ProtectedRoute permission={['NOTIFICATIONS_CREATE', 'NOTIFICATIONS_SEND']} />}>
+            <Route path="/notificaciones/nueva" element={<NotificationForm />} />
+          </Route>
+
           {/* Requests Routes */}
-          <Route path="/solicitudes" element={<Navigate to="/solicitudes/oraciones" replace />} />
-          <Route path="/solicitudes/oraciones" element={<PrayerRequestList />} />
-          <Route path="/solicitudes/visitas" element={<VisitorRequestList />} />
+          <Route element={<ProtectedRoute permission="REQUESTS_VIEW" />}>
+            <Route path="/solicitudes" element={<Navigate to="/solicitudes/oraciones" replace />} />
+            <Route path="/solicitudes/oraciones" element={<PrayerRequestList />} />
+            <Route path="/solicitudes/visitas" element={<VisitorRequestList />} />
+          </Route>
 
           {/* Users Routes */}
-          <Route path="/usuarios" element={<UserList />} />
-          <Route path="/usuarios/nuevo" element={<UserForm />} />
-          <Route path="/usuarios/:id/editar" element={<UserForm />} />
-          
+          <Route element={<ProtectedRoute permission="USERS_VIEW" />}>
+            <Route path="/usuarios" element={<UserList />} />
+          </Route>
+          <Route element={<ProtectedRoute permission="USERS_EDIT" />}>
+            <Route path="/usuarios/nuevo" element={<UserForm />} />
+            <Route path="/usuarios/:id/editar" element={<UserForm />} />
+          </Route>
+
           {/* Roles Routes */}
-          <Route path="/roles" element={<RoleList />} />
-          <Route path="/multimedia" element={<MultimediaList />} />
-          <Route path="/reportes" element={<ReportList />} />
-          <Route path="/configuracion" element={<Configuracion />} />
+          <Route element={<ProtectedRoute permission="ROLES_VIEW" />}>
+            <Route path="/roles" element={<RoleList />} />
+          </Route>
+          <Route element={<ProtectedRoute permission="MEDIA_VIEW" />}>
+            <Route path="/multimedia" element={<MultimediaList />} />
+          </Route>
+          <Route element={<ProtectedRoute permission="REPORTS_VIEW" />}>
+            <Route path="/reportes" element={<ReportList />} />
+          </Route>
+          <Route element={<ProtectedRoute permission="SETTINGS_VIEW" />}>
+            <Route path="/configuracion" element={<Configuracion />} />
+          </Route>
         </Route>
       </Route>
 

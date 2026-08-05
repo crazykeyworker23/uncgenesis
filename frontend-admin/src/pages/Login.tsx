@@ -36,10 +36,16 @@ export const Login: React.FC = () => {
 
       const { user, access, refresh } = response.data;
 
-      // Verify if the user has administrative credentials (staff or admin role)
-      // Since it's the admin panel, we enforce it.
       if (user.status !== 'ACTIVE') {
         throw new Error('Tu cuenta no se encuentra activa.');
+      }
+
+      // El panel es sólo para quien gestiona algo. Los miembros de la comunidad
+      // tienen credenciales válidas, pero su lugar es la app móvil.
+      if (!user.can_access_admin) {
+        throw new Error(
+          'Esta cuenta es de miembro de la comunidad y no tiene acceso al panel administrativo. Ingresa desde la aplicación móvil Génesis.'
+        );
       }
 
       login(user, access, refresh);
@@ -61,10 +67,17 @@ export const Login: React.FC = () => {
       });
 
       const { user, access, refresh } = response.data;
+
+      if (!user.can_access_admin) {
+        throw new Error(
+          'Esta cuenta es de miembro de la comunidad y no tiene acceso al panel administrativo. Ingresa desde la aplicación móvil Génesis.'
+        );
+      }
+
       login(user, access, refresh);
       navigate('/dashboard');
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || 'Error al conectar con Google.');
+      setErrorMsg(err.response?.data?.detail || err.message || 'Error al conectar con Google.');
     } finally {
       setLoading(false);
     }

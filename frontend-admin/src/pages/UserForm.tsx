@@ -74,7 +74,9 @@ export const UserForm: React.FC = () => {
         assigned_roles: formData.assigned_roles,
       } as any;
 
-      if (!isEdit && formData.password) {
+      // La contraseña sólo viaja si se escribió: al editar, dejarla en blanco
+      // conserva las credenciales actuales.
+      if (formData.password) {
         payload.password = formData.password;
       }
 
@@ -257,23 +259,34 @@ export const UserForm: React.FC = () => {
               </select>
             </div>
 
-            {/* Password (only on create) */}
-            {!isEdit && (
-              <div className="space-y-1.5 col-span-2">
-                <label htmlFor="user-password" className="block text-xs font-semibold text-crema text-opacity-70 ml-1">
-                  Contraseña Inicial *
-                </label>
-                <input
-                  id="user-password"
-                  type="password"
-                  placeholder="GenesisPassword123"
-                  className={`w-full px-4 py-2.5 bg-deep-teal bg-opacity-40 border rounded-xl text-white placeholder-crema placeholder-opacity-35 text-xs focus:outline-none transition-all ${
-                    errors.password ? 'border-red-500' : 'border-white border-opacity-10 focus:border-dorado'
-                  }`}
-                  {...register('password', { required: 'La contraseña es obligatoria para nuevos usuarios' })}
-                />
-              </div>
-            )}
+            {/* Credenciales de acceso: al editar permite restablecerlas */}
+            <div className="space-y-1.5 col-span-2">
+              <label htmlFor="user-password" className="block text-xs font-semibold text-crema text-opacity-70 ml-1">
+                {isEdit ? 'Nueva Contraseña' : 'Contraseña Inicial *'}
+              </label>
+              <input
+                id="user-password"
+                type="password"
+                autoComplete="new-password"
+                placeholder={isEdit ? 'Dejar en blanco para mantener la actual' : 'Mínimo 8 caracteres'}
+                className={`w-full px-4 py-2.5 bg-deep-teal bg-opacity-40 border rounded-xl text-white placeholder-crema placeholder-opacity-35 text-xs focus:outline-none transition-all ${
+                  errors.password ? 'border-red-500' : 'border-white border-opacity-10 focus:border-dorado'
+                }`}
+                {...register('password', {
+                  required: isEdit ? false : 'La contraseña es obligatoria para nuevos usuarios',
+                })}
+              />
+              <p className="text-[10px] text-crema text-opacity-40 ml-1">
+                {isEdit
+                  ? 'Al escribir una contraseña se reemplazan las credenciales de acceso de esta persona.'
+                  : 'La persona usará esta contraseña para entrar. Debe tener al menos 8 caracteres y no ser demasiado común.'}
+              </p>
+              {errors.password && (
+                <span className="text-[10px] text-red-400 font-medium ml-1">
+                  {String(errors.password.message)}
+                </span>
+              )}
+            </div>
 
             {/* Bio */}
             <div className="space-y-1.5 col-span-2">
