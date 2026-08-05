@@ -8,6 +8,11 @@ interface ProtectedRouteProps {
    * Sin valor, basta con tener acceso al panel.
    */
   permission?: string | string[];
+  /**
+   * Sección propia del líder: exige tener al menos una célula a cargo, en
+   * lugar de un permiso del catálogo.
+   */
+  requiresLedCell?: boolean;
 }
 
 /**
@@ -17,7 +22,7 @@ interface ProtectedRouteProps {
  * secciones y sólo fallaba al llamar al backend. Ahora cada rol entra
  * únicamente a lo que le corresponde.
  */
-export function ProtectedRoute({ permission }: ProtectedRouteProps) {
+export function ProtectedRoute({ permission, requiresLedCell }: ProtectedRouteProps) {
   const { isAuthenticated, user } = useAuthStore();
 
   if (!isAuthenticated || !user) {
@@ -31,6 +36,12 @@ export function ProtectedRoute({ permission }: ProtectedRouteProps) {
   // Un miembro de la comunidad no opera el panel: su lugar es la app móvil.
   if (user.can_access_admin === false) {
     return <Navigate to="/login" replace />;
+  }
+
+  // La sección del líder no depende del catálogo de permisos, sino de tener
+  // efectivamente una célula a cargo.
+  if (requiresLedCell && (user.leads_cells ?? 0) === 0) {
+    return <NoAccess />;
   }
 
   if (!userHasPermission(user, permission)) {

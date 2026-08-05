@@ -14,10 +14,16 @@ export interface AdminModule {
   permission?: string;
   /** Permisos que habilitan crear o editar dentro de la sección. */
   writePermission?: string[];
+  /**
+   * Sección propia del líder: se muestra a quien tiene una célula a cargo,
+   * sin depender de un permiso del catálogo.
+   */
+  requiresLedCell?: boolean;
 }
 
 export const ADMIN_MODULES: AdminModule[] = [
   { name: 'Dashboard', path: '/dashboard' },
+  { name: 'Mi Célula', path: '/mi-celula', requiresLedCell: true },
   {
     name: 'Publicaciones',
     path: '/publicaciones',

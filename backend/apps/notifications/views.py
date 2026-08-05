@@ -72,6 +72,23 @@ class NotificationViewSet(viewsets.ModelViewSet):
         if user.is_superuser or RoleType.MEMBER in user_roles:
             query |= Q(target_audience='MEMBERS', target_user__isnull=True)
 
+        # 3. Recordatorios que el lider envia a su celula: los recibe quien
+        #    esta asignado a esa celula, y tambien el propio lider.
+        if getattr(user, 'assigned_cell_id', None):
+            query |= Q(
+                target_audience='CELL',
+                target_cell_id=user.assigned_cell_id,
+                target_user__isnull=True,
+            )
+
+        led_cell_ids = list(user.led_cells.values_list('id', flat=True))
+        if led_cell_ids:
+            query |= Q(
+                target_audience='CELL',
+                target_cell_id__in=led_cell_ids,
+                target_user__isnull=True,
+            )
+
         return qs.filter(query, status='SENT').distinct()
 
     def get_permissions(self):

@@ -13,6 +13,31 @@ class LeaderSerializer(serializers.ModelSerializer):
         full = f"{obj.first_name} {obj.last_name}".strip()
         return full if full else obj.email
 
+class CellMemberSerializer(serializers.ModelSerializer):
+    """Persona a cargo de un líder dentro de su célula."""
+
+    full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomUser
+        fields = [
+            'id', 'email', 'first_name', 'last_name', 'full_name',
+            'phone', 'location', 'status', 'avatar', 'created_at',
+        ]
+
+    def get_full_name(self, obj):
+        full = f"{obj.first_name} {obj.last_name}".strip()
+        return full if full else obj.email
+
+
+class CellReminderSerializer(serializers.Serializer):
+    """Recordatorio que un líder envía a los miembros de su célula."""
+
+    title = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    body = serializers.CharField()
+    scheduled_for = serializers.DateTimeField(required=False, allow_null=True)
+
+
 class CellGroupSerializer(serializers.ModelSerializer):
     leader = LeaderSerializer(read_only=True)
     leader_id = serializers.PrimaryKeyRelatedField(

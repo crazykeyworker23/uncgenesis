@@ -13,6 +13,7 @@ import { EventList } from '../pages/EventList';
 import { EventForm } from '../pages/EventForm';
 import { CellList } from '../pages/CellList';
 import { CellForm } from '../pages/CellForm';
+import { MyCell } from '../pages/MyCell';
 
 import { PrayerRequestList } from '../pages/PrayerRequestList';
 import { VisitorRequestList } from '../pages/VisitorRequestList';
@@ -39,6 +40,11 @@ export default function AppRouter() {
         <Route element={<AdminLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
+
+          {/* Vista propia del líder de célula */}
+          <Route element={<ProtectedRoute requiresLedCell />}>
+            <Route path="/mi-celula" element={<MyCell />} />
+          </Route>
 
           {/* Publications Routes */}
           <Route element={<ProtectedRoute permission="PUBLICATIONS_VIEW" />}>

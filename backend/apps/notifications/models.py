@@ -44,6 +44,7 @@ class TargetAudience(models.TextChoices):
     LEADERS = 'LEADERS', 'Líderes de Célula'
     MEMBERS = 'MEMBERS', 'Miembros Registrados'
     USER = 'USER', 'Usuario Específico'
+    CELL = 'CELL', 'Miembros de una Célula'
 
 
 class Notification(models.Model):
@@ -66,6 +67,15 @@ class Notification(models.Model):
         null=True,
         blank=True,
         related_name='received_notifications'
+    )
+    # Destinatario cuando la audiencia es CELL: permite que un líder avise
+    # únicamente a los miembros de la célula que tiene a su cargo.
+    target_cell = models.ForeignKey(
+        'cells.CellGroup',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='notifications'
     )
     status = models.CharField(
         max_length=20,

@@ -20,6 +20,8 @@ export interface UserProfile {
   is_superadmin?: boolean;
   /** Si la cuenta puede operar el panel web. */
   can_access_admin?: boolean;
+  /** Cuántas células tiene a su cargo: habilita la sección "Mi Célula". */
+  leads_cells?: number;
 }
 
 interface AuthState {
@@ -93,6 +95,8 @@ export function usePermissions() {
   return {
     user,
     isSuperadmin: Boolean(user?.is_superadmin),
+    /** Lidera al menos una célula: habilita su vista propia. */
+    leadsCells: (user?.leads_cells ?? 0) > 0,
     can: (permission?: string | string[]) => userHasPermission(user, permission),
   };
 }

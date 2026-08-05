@@ -104,4 +104,9 @@ def can_access_admin_panel(user):
     if is_superadmin(user):
         return True
 
-    return bool(get_user_permissions(user))
+    if get_user_permissions(user):
+        return True
+
+    # Tener una célula a cargo basta para entrar: el líder gestiona su grupo
+    # aunque no se le hayan asignado permisos del catálogo.
+    return user.led_cells.exists()

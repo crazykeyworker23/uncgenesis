@@ -62,6 +62,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'permissions': sorted(get_user_permissions(user)),
             'is_superadmin': is_superadmin(user),
             'can_access_admin': can_access_admin_panel(user),
+            'leads_cells': user.led_cells.count(),
         }
         return data
 
@@ -123,6 +124,7 @@ class UserMeSerializer(serializers.ModelSerializer):
     permissions = serializers.SerializerMethodField(read_only=True)
     is_superadmin = serializers.SerializerMethodField(read_only=True)
     can_access_admin = serializers.SerializerMethodField(read_only=True)
+    leads_cells = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = User
@@ -130,11 +132,17 @@ class UserMeSerializer(serializers.ModelSerializer):
             'id', 'email', 'first_name', 'last_name', 'full_name', 'phone',
             'avatar', 'location', 'bio', 'status', 'created_at',
             'roles', 'permissions', 'is_superadmin', 'can_access_admin',
+            'leads_cells',
         )
         read_only_fields = (
             'id', 'email', 'full_name', 'status', 'created_at',
             'roles', 'permissions', 'is_superadmin', 'can_access_admin',
+            'leads_cells',
         )
+
+    def get_leads_cells(self, obj):
+        """Cuántas células tiene a su cargo: habilita la sección "Mi Célula"."""
+        return obj.led_cells.count()
 
     def get_roles(self, obj):
         from apps.roles.utils import get_user_role_names
