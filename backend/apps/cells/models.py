@@ -19,6 +19,15 @@ class CellGroup(models.Model):
     name = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True, blank=True)
     leader = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, related_name='led_cells')
+    # El coordinador supervisa varias células: es el nivel intermedio entre el
+    # pastor, que ve toda la iglesia, y el líder, que sólo ve la suya.
+    coordinator = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='coordinated_cells'
+    )
     meeting_day = models.CharField(max_length=20, choices=MeetingDay.choices)
     meeting_time = models.TimeField()
     address = models.CharField(max_length=255)
@@ -46,3 +55,119 @@ class CellGroup(models.Model):
                 counter += 1
             self.slug = slug
         super().save(*args, **kwargs)
+
+
+class AttendanceStatus(models.TextChoices):
+    PRESENT = 'PRESENT', 'Asistió'
+    ABSENT = 'ABSENT', 'No asistió'
+    LATE = 'LATE', 'Tardanza'
+    EXCUSED = 'EXCUSED', 'Justificado'
+
+
+class CellMeeting(models.Model):
+    """Reunión realizada por una célula."""
+
+    cell = models.ForeignKey(CellGroup, on_delete=models.CASCADE, related_name='meetings')
+    date = models.DateField(db_index=True)
+    time = models.TimeField(null=True, blank=True)
+    topic = models.CharField(max_length=255, blank=True)
+    notes = models.TextField(blank=True, verbose_name='observaciones')
+    # Permite anotar visitantes que no están registrados como miembros.
+    guests_count = models.PositiveIntegerField(default=0)
+    registered_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='registered_meetings'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date', '-time']
+        verbose_name = 'reunión de célula'
+        verbose_name_plural = 'reuniones de célula'
+        constraints = [
+            models.UniqueConstraint(fields=['cell', 'date'], name='unique_meeting_per_cell_and_date')
+        ]
+
+    def __str__(self):
+        return f"{self.cell.name} - {self.date}"
+
+    @property
+    def attendees_count(self):
+        """Cuántos asistieron realmente, contando las tardanzas."""
+        return self.attendances.filter(
+            status__in=[AttendanceStatus.PRESENT, AttendanceStatus.LATE]
+        ).count() + self.guests_count
+
+
+class Attendance(models.Model):
+    """Asistencia de una persona a una reunión concreta."""
+
+    meeting = models.ForeignKey(CellMeeting, on_delete=models.CASCADE, related_name='attendances')
+    member = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='attendances')
+    status = models.CharField(
+        max_length=20,
+        choices=AttendanceStatus.choices,
+        default=AttendanceStatus.PRESENT,
+        db_index=True
+    )
+    notes = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['member__first_name', 'member__email']
+        verbose_name = 'asistencia'
+        verbose_name_plural = 'asistencias'
+        constraints = [
+            models.UniqueConstraint(fields=['meeting', 'member'], name='unique_attendance_per_meeting')
+        ]
+
+    def __str__(self):
+        return f"{self.member.email} - {self.get_status_display()}"
+
+
+class FollowUpType(models.TextChoices):
+    CALL = 'CALL', 'Llamada'
+    VISIT = 'VISIT', 'Visita'
+    MESSAGE = 'MESSAGE', 'Mensaje'
+    OTHER = 'OTHER', 'Otro'
+
+
+class MemberFollowUp(models.Model):
+    """
+    Seguimiento pastoral de un miembro dentro de su célula.
+
+    Deja constancia de los contactos y visitas realizadas, y permite marcar a
+    quien necesita atención especial.
+    """
+
+    cell = models.ForeignKey(CellGroup, on_delete=models.CASCADE, related_name='follow_ups')
+    member = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='follow_ups')
+    type = models.CharField(max_length=20, choices=FollowUpType.choices, default=FollowUpType.CALL)
+    date = models.DateField(db_index=True)
+    summary = models.TextField()
+    needs_attention = models.BooleanField(
+        default=False,
+        help_text='Marca a quien requiere seguimiento cercano.'
+    )
+    registered_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='registered_follow_ups'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date', '-created_at']
+        verbose_name = 'seguimiento de miembro'
+        verbose_name_plural = 'seguimientos de miembros'
+
+    def __str__(self):
+        return f"{self.member.email} - {self.get_type_display()} ({self.date})"

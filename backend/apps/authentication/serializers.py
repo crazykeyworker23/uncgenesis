@@ -41,6 +41,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # El alcance de la sesión viaja con el login para que el panel web sepa
         # de inmediato qué módulos habilitar y si la cuenta puede entrar
         # siquiera (los miembros de la comunidad usan sólo la app móvil).
+        from apps.roles.scope import describe_scope
         from apps.roles.utils import (
             can_access_admin_panel,
             get_user_permissions,
@@ -64,6 +65,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'is_superadmin': is_superadmin(user),
             'can_access_admin': can_access_admin_panel(user),
             'leads_cells': user.led_cells.count(),
+            'scope': describe_scope(user),
         }
         return data
 
@@ -126,6 +128,7 @@ class UserMeSerializer(serializers.ModelSerializer):
     is_superadmin = serializers.SerializerMethodField(read_only=True)
     can_access_admin = serializers.SerializerMethodField(read_only=True)
     leads_cells = serializers.SerializerMethodField(read_only=True)
+    scope = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = User
@@ -133,13 +136,20 @@ class UserMeSerializer(serializers.ModelSerializer):
             'id', 'email', 'first_name', 'last_name', 'full_name', 'phone',
             'avatar', 'location', 'bio', 'status', 'created_at',
             'roles', 'permissions', 'is_superadmin', 'can_access_admin',
-            'leads_cells',
+            'leads_cells', 'scope',
         )
         read_only_fields = (
             'id', 'email', 'full_name', 'status', 'created_at',
             'roles', 'permissions', 'is_superadmin', 'can_access_admin',
-            'leads_cells',
+            'leads_cells', 'scope',
         )
+
+    @extend_schema_field(serializers.DictField())
+    def get_scope(self, obj):
+        """Alcance de la sesión: qué células puede tocar y en qué nivel."""
+        from apps.roles.scope import describe_scope
+
+        return describe_scope(obj)
 
     # Los tipos se declaran para que la documentación OpenAPI publique el tipo
     # real de cada campo en lugar de asumir texto.

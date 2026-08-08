@@ -169,7 +169,13 @@ class TestRoleScopedAccess:
             {'assigned_roles': [RoleType.SUPERADMIN]},
             format='json',
         )
-        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        # 403 porque el pastor no administra cuentas (gestionar usuarios, roles
+        # y permisos es del superadministrador); 400 si algún rol llegara a
+        # tener USERS_EDIT y fuera el serializer quien lo rechazara.
+        assert res.status_code in (
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_400_BAD_REQUEST,
+        )
 
         target.refresh_from_db()
         assert not is_superadmin(target)

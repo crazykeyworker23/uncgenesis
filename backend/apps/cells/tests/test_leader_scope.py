@@ -77,7 +77,8 @@ class TestLeaderSeesOwnFlock:
 
         res = _client_for(leader).get(MY_CELLS_URL)
         assert res.status_code == status.HTTP_200_OK
-        assert [c['id'] for c in res.data] == [mine.id]
+        # La respuesta acompaña el alcance de la sesión junto al listado.
+        assert [c['id'] for c in res.data['results']] == [mine.id]
 
     def test_leader_lists_the_people_in_charge(self, make_user, make_cell):
         leader = make_user('lider2@genesisapp.org', RoleType.CELL_LEADER)

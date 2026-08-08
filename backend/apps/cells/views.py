@@ -5,6 +5,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.roles.permissions import HasAppPermission
+from apps.roles.scope import (
+    can_manage_cell,
+    can_reach_cell,
+    describe_scope,
+    get_accessible_cell_ids,
+)
 from apps.roles.utils import has_any_permission, is_superadmin
 from .models import CellGroup
 from .serializers import (
@@ -12,6 +18,7 @@ from .serializers import (
     CellMemberSerializer,
     CellReminderSerializer,
 )
+from .views_management import CellManagementMixin
 
 PERM_MAP = {
     'list':    'CELLS_VIEW',
@@ -22,7 +29,7 @@ PERM_MAP = {
     'destroy': 'CELLS_DELETE',
 }
 
-class CellGroupViewSet(viewsets.ModelViewSet):
+class CellGroupViewSet(CellManagementMixin, viewsets.ModelViewSet):
     queryset = CellGroup.objects.select_related('leader').all()
     serializer_class = CellGroupSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -40,13 +47,10 @@ class CellGroupViewSet(viewsets.ModelViewSet):
             return [permissions.AllowAny()]
         # Las acciones del líder se autorizan por pertenencia (ser el líder de
         # esa célula), no por un permiso global del catálogo.
-        if self.action in ['my_cells', 'members', 'send_reminder']:
+        if self.action in ['my_cells', 'members', 'send_reminder', 'statistics',
+                           'attendance_history', 'register_member']:
             return [IsAuthenticated()]
         return [IsAuthenticated(), HasAppPermission()]
-
-    def _leads(self, cell, user):
-        """`True` si el usuario es el líder de esa célula."""
-        return bool(cell.leader_id) and cell.leader_id == getattr(user, 'id', None)
 
     def _can_manage_any_cell(self, user):
         return is_superadmin(user) or has_any_permission(user, self.MANAGE_PERMISSIONS)
@@ -59,36 +63,45 @@ class CellGroupViewSet(viewsets.ModelViewSet):
 
     def _guarded_write(self, request, handler, *args, **kwargs):
         """
-        Un líder puede editar la célula que tiene a cargo, pero no las ajenas.
-        Quien administra células a nivel de iglesia mantiene el acceso completo.
+        Cada quien edita dentro de su alcance: el líder su célula, el
+        coordinador las que supervisa, el pastor todas.
         """
         cell = self.get_object()
-        if not self._can_manage_any_cell(request.user) and not self._leads(cell, request.user):
+        if not can_manage_cell(request.user, cell.id):
             return Response(
-                {"error": "Sólo puedes editar la célula que tienes a tu cargo."},
+                {"error": "Sólo puedes editar las células que tienes a tu cargo."},
                 status=status.HTTP_403_FORBIDDEN
             )
         return handler(request, *args, **kwargs)
 
     @action(detail=False, methods=['get'], url_path='my-cells')
     def my_cells(self, request):
-        """Células que la persona autenticada tiene a su cargo."""
-        cells = self.get_queryset().filter(leader=request.user)
-        serializer = self.get_serializer(cells, many=True)
-        return Response(serializer.data)
+        """
+        Células dentro del alcance de la persona autenticada.
+
+        El líder recibe la suya, el coordinador las que supervisa y el pastor
+        todas las de la iglesia.
+        """
+        allowed = get_accessible_cell_ids(request.user)
+        cells = self.get_queryset() if allowed is None else self.get_queryset().filter(id__in=allowed)
+
+        return Response({
+            'scope': describe_scope(request.user),
+            'results': self.get_serializer(cells, many=True).data,
+        })
 
     @action(detail=True, methods=['get'])
     def members(self, request, pk=None):
         """
         Personas asignadas a la célula.
 
-        Visible para el líder de esa célula y para quien administra células.
+        Visible dentro del alcance: su líder, su coordinador y el pastorado.
         """
         cell = self.get_object()
 
-        if not self._can_manage_any_cell(request.user) and not self._leads(cell, request.user):
+        if not can_reach_cell(request.user, cell.id):
             return Response(
-                {"error": "Sólo puedes ver los miembros de la célula que tienes a tu cargo."},
+                {"error": "Sólo puedes ver los miembros de las células que tienes a tu cargo."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -117,9 +130,9 @@ class CellGroupViewSet(viewsets.ModelViewSet):
 
         cell = self.get_object()
 
-        if not self._can_manage_any_cell(request.user) and not self._leads(cell, request.user):
+        if not can_manage_cell(request.user, cell.id):
             return Response(
-                {"error": "Sólo puedes enviar recordatorios a la célula que tienes a tu cargo."},
+                {"error": "Sólo puedes enviar recordatorios a las células que tienes a tu cargo."},
                 status=status.HTTP_403_FORBIDDEN
             )
 
@@ -203,9 +216,9 @@ class CellGroupViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve']:
             return
 
-        # El líder edita la célula que tiene a cargo sin necesitar el permiso
-        # global CELLS_EDIT, que corresponde a quien administra todas.
-        if self.action in ['update', 'partial_update'] and self._leads_target_cell(request.user):
+        # Editar la célula propia se autoriza por responsabilidad, no por el
+        # permiso global CELLS_EDIT, que corresponde a quien administra todas.
+        if self.action in ['update', 'partial_update'] and self._manages_target_cell(request.user):
             if not request.user or not request.user.is_authenticated:
                 self.permission_denied(request)
             return
@@ -213,8 +226,8 @@ class CellGroupViewSet(viewsets.ModelViewSet):
         self.required_permission = self.get_required_permission()
         super().check_permissions(request)
 
-    def _leads_target_cell(self, user):
-        """Resuelve la célula de la URL y comprueba si el usuario la lidera."""
+    def _manages_target_cell(self, user):
+        """Resuelve la célula de la URL y comprueba si el usuario la gestiona."""
         if not user or not user.is_authenticated:
             return False
 
@@ -226,4 +239,4 @@ class CellGroupViewSet(viewsets.ModelViewSet):
         if cell is None:
             cell = CellGroup.objects.filter(slug=lookup_value).first()
 
-        return bool(cell and cell.leader_id == user.id)
+        return bool(cell and can_manage_cell(user, cell.id))
