@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from drf_spectacular.utils import extend_schema_field
 from django.contrib.auth.password_validation import validate_password
 
 User = get_user_model()
@@ -140,25 +141,32 @@ class UserMeSerializer(serializers.ModelSerializer):
             'leads_cells',
         )
 
+    # Los tipos se declaran para que la documentación OpenAPI publique el tipo
+    # real de cada campo en lugar de asumir texto.
+    @extend_schema_field(serializers.IntegerField())
     def get_leads_cells(self, obj):
         """Cuántas células tiene a su cargo: habilita la sección "Mi Célula"."""
         return obj.led_cells.count()
 
+    @extend_schema_field(serializers.ListSerializer(child=serializers.CharField()))
     def get_roles(self, obj):
         from apps.roles.utils import get_user_role_names
 
         return sorted(get_user_role_names(obj))
 
+    @extend_schema_field(serializers.ListSerializer(child=serializers.CharField()))
     def get_permissions(self, obj):
         from apps.roles.utils import get_user_permissions
 
         return sorted(get_user_permissions(obj))
 
+    @extend_schema_field(serializers.BooleanField())
     def get_is_superadmin(self, obj):
         from apps.roles.utils import is_superadmin
 
         return is_superadmin(obj)
 
+    @extend_schema_field(serializers.BooleanField())
     def get_can_access_admin(self, obj):
         from apps.roles.utils import can_access_admin_panel
 
