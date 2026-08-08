@@ -548,3 +548,169 @@ class TestMemberScope:
         assert res.data['scope']['scope'] == AccessScope.SELF
         assert res.data['scope']['church_wide'] is False
         assert res.data['can_access_admin'] is False
+
+
+REPORTS_URL = reverse('cell-reports-list')
+
+
+@pytest.mark.django_db
+class TestMemberRemoval:
+    """Retirar de la célula no es eliminar del sistema."""
+
+    def test_leader_removes_member_without_deleting_the_person(self, church):
+        member = church['member_a']
+        cell = church['cell_a']
+
+        res = _client(church['leader_a']).post(
+            cell_url('remove-member', cell.id),
+            {'member_id': member.id},
+            format='json',
+        )
+        assert res.status_code == status.HTTP_200_OK
+
+        member.refresh_from_db()
+        assert member.assigned_cell_id is None
+        # La cuenta sigue existiendo: sólo dejó de pertenecer al grupo.
+        assert User.objects.filter(id=member.id).exists()
+
+    def test_removal_keeps_the_attendance_history(self, church):
+        cell, member = church['cell_a'], church['member_a']
+        meeting = CellMeeting.objects.create(cell=cell, date='2026-08-20')
+        Attendance.objects.create(meeting=meeting, member=member, status=AttendanceStatus.PRESENT)
+
+        _client(church['leader_a']).post(
+            cell_url('remove-member', cell.id), {'member_id': member.id}, format='json'
+        )
+
+        assert Attendance.objects.filter(member=member).count() == 1
+
+    def test_leader_cannot_remove_from_another_cell(self, church):
+        outsider = church['member_z']
+
+        res = _client(church['leader_a']).post(
+            cell_url('remove-member', church['cell_z'].id),
+            {'member_id': outsider.id},
+            format='json',
+        )
+        assert res.status_code == status.HTTP_403_FORBIDDEN
+
+        outsider.refresh_from_db()
+        assert outsider.assigned_cell_id == church['cell_z'].id
+
+    def test_coordinator_does_not_compose_the_cell(self, church):
+        """Supervisa; componer el grupo es del líder."""
+        res = _client(church['coordinator']).post(
+            cell_url('remove-member', church['cell_a'].id),
+            {'member_id': church['member_a'].id},
+            format='json',
+        )
+        assert res.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.django_db
+class TestCellReports:
+    """El líder informa de su célula y la supervisión responde."""
+
+    def _draft(self, church, leader=None):
+        return _client(leader or church['leader_a']).post(
+            REPORTS_URL,
+            {
+                'cell': church['cell_a'].id,
+                'period_start': '2026-08-01',
+                'period_end': '2026-08-31',
+                'summary': 'Buen mes, creció la asistencia.',
+                'highlights': 'Dos personas nuevas.',
+                'challenges': 'Cuesta la puntualidad.',
+                'prayer_needs': 'Por la salud de una hermana.',
+            },
+            format='json',
+        )
+
+    def test_leader_writes_and_sends_a_report(self, church):
+        created = self._draft(church)
+        assert created.status_code == status.HTTP_201_CREATED
+        assert created.data['status'] == 'DRAFT'
+
+        report_id = created.data['id']
+        sent = _client(church['leader_a']).post(f'{REPORTS_URL}{report_id}/send/')
+        assert sent.status_code == status.HTTP_200_OK
+        assert sent.data['status'] == 'SENT'
+        assert sent.data['sent_at'] is not None
+
+    def test_sending_freezes_the_period_figures(self, church):
+        """Corregir una asistencia después no altera lo ya entregado."""
+        cell = church['cell_a']
+        meeting = CellMeeting.objects.create(cell=cell, date='2026-08-10')
+        Attendance.objects.create(
+            meeting=meeting, member=church['member_a'], status=AttendanceStatus.PRESENT
+        )
+
+        report_id = self._draft(church).data['id']
+        sent = _client(church['leader_a']).post(f'{REPORTS_URL}{report_id}/send/')
+        assert sent.data['meetings_held'] == 1
+        assert sent.data['average_attendance'] == 1.0
+
+        CellMeeting.objects.create(cell=cell, date='2026-08-11')
+
+        from apps.cells.models import CellReport
+        report = CellReport.objects.get(id=report_id)
+        assert report.meetings_held == 1
+
+    def test_a_sent_report_can_no_longer_be_edited(self, church):
+        report_id = self._draft(church).data['id']
+        _client(church['leader_a']).post(f'{REPORTS_URL}{report_id}/send/')
+
+        res = _client(church['leader_a']).patch(
+            f'{REPORTS_URL}{report_id}/', {'summary': 'Cambiado'}, format='json'
+        )
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_coordinator_reads_and_answers_the_report(self, church):
+        report_id = self._draft(church).data['id']
+        _client(church['leader_a']).post(f'{REPORTS_URL}{report_id}/send/')
+
+        listing = _client(church['coordinator']).get(REPORTS_URL)
+        assert listing.status_code == status.HTTP_200_OK
+        assert len(listing.data['results']) == 1
+
+        reviewed = _client(church['coordinator']).post(
+            f'{REPORTS_URL}{report_id}/review/',
+            {'review_notes': 'Bien hecho, seguimos orando por esa hermana.'},
+            format='json',
+        )
+        assert reviewed.status_code == status.HTTP_200_OK
+        assert reviewed.data['status'] == 'REVIEWED'
+        assert reviewed.data['reviewed_by']['email'] == church['coordinator'].email
+
+    def test_leader_does_not_review_its_own_report(self, church):
+        report_id = self._draft(church).data['id']
+        _client(church['leader_a']).post(f'{REPORTS_URL}{report_id}/send/')
+
+        res = _client(church['leader_a']).post(
+            f'{REPORTS_URL}{report_id}/review/', {'review_notes': 'Me apruebo'}, format='json'
+        )
+        assert res.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_a_foreign_leader_never_sees_the_report(self, church):
+        report_id = self._draft(church).data['id']
+        _client(church['leader_a']).post(f'{REPORTS_URL}{report_id}/send/')
+
+        listing = _client(church['outsider_leader']).get(REPORTS_URL)
+        assert listing.data['results'] == []
+        assert _client(church['outsider_leader']).get(
+            f'{REPORTS_URL}{report_id}/'
+        ).status_code == status.HTTP_404_NOT_FOUND
+
+    def test_report_period_must_be_coherent(self, church):
+        res = _client(church['leader_a']).post(
+            REPORTS_URL,
+            {
+                'cell': church['cell_a'].id,
+                'period_start': '2026-08-31',
+                'period_end': '2026-08-01',
+                'summary': 'x',
+            },
+            format='json',
+        )
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'period_end' in res.data

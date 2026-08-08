@@ -114,3 +114,42 @@ export function formatDate(value?: string | null): string {
     year: 'numeric',
   });
 }
+
+export type CellReportStatus = 'DRAFT' | 'SENT' | 'REVIEWED';
+
+export const REPORT_STATUS: Record<CellReportStatus, { label: string; classes: string }> = {
+  DRAFT: {
+    label: 'Borrador',
+    classes: 'bg-gray-500/20 text-gray-300 border-gray-500/40',
+  },
+  SENT: {
+    label: 'Enviado',
+    classes: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+  },
+  REVIEWED: {
+    label: 'Revisado',
+    classes: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+  },
+};
+
+export interface CellReport {
+  id: number;
+  cell: number;
+  cell_name: string;
+  period_start: string;
+  period_end: string;
+  summary: string;
+  highlights: string;
+  challenges: string;
+  prayer_needs: string;
+  meetings_held: number;
+  average_attendance: number;
+  new_members: number;
+  status: CellReportStatus;
+  status_display: string;
+  submitted_by: CellMember | null;
+  sent_at: string | null;
+  reviewed_by: CellMember | null;
+  reviewed_at: string | null;
+  review_notes: string;
+}

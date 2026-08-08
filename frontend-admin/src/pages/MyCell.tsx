@@ -15,7 +15,9 @@ import {
   BarChart3,
   Plus,
   UserPlus,
+  UserMinus,
   TrendingUp,
+  FileText,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { usePermissions } from '../store/authStore';
@@ -30,10 +32,12 @@ import {
   FollowUp,
   FollowUpType,
   MembersResponse,
+  CellReport,
+  REPORT_STATUS,
   formatDate,
 } from '../features/cells/management';
 
-type Tab = 'members' | 'meetings' | 'followups' | 'stats';
+type Tab = 'members' | 'meetings' | 'followups' | 'reports' | 'stats';
 
 /**
  * Vista de gestión de célula.
@@ -120,6 +124,7 @@ export const MyCell: React.FC = () => {
     { key: 'members', label: 'Miembros', icon: Users },
     { key: 'meetings', label: 'Reuniones', icon: CalendarDays },
     { key: 'followups', label: 'Seguimiento', icon: HeartHandshake },
+    { key: 'reports', label: 'Informes', icon: FileText },
     { key: 'stats', label: 'Estadísticas', icon: BarChart3 },
   ];
 
@@ -243,6 +248,18 @@ export const MyCell: React.FC = () => {
         />
       )}
 
+      {selectedCellId && tab === 'reports' && (
+        <ReportsTab
+          cellId={selectedCellId}
+          canManage={canManage}
+          onDone={(text) => {
+            notify('ok', text);
+            queryClient.invalidateQueries({ queryKey: ['cell-reports', selectedCellId] });
+          }}
+          onError={(err) => notify('error', readError(err, 'No pudimos guardar el informe.'))}
+        />
+      )}
+
       {selectedCellId && tab === 'stats' && (
         <StatsTab
           cellId={selectedCellId}
@@ -277,6 +294,13 @@ const MembersTab: React.FC<TabProps> = ({ cellId, members, canManage, onDone, on
       setForm({ first_name: '', last_name: '', phone: '', email: '' });
       setShowForm(false);
     },
+    onError,
+  });
+
+  const remove = useMutation({
+    mutationFn: async (memberId: number) =>
+      apiClient.post(`/cells/${cellId}/remove-member/`, { member_id: memberId }),
+    onSuccess: (res) => onDone(res.data.detail ?? 'Integrante retirado.'),
     onError,
   });
 
@@ -350,6 +374,24 @@ const MembersTab: React.FC<TabProps> = ({ cellId, members, canManage, onDone, on
                 >
                   {member.status === 'ACTIVE' ? 'Activo' : 'Inactivo'}
                 </span>
+                {canManage && (
+                  <button
+                    title="Retirar de la célula"
+                    onClick={() => {
+                      const name = member.full_name || member.email;
+                      if (
+                        window.confirm(
+                          `¿Retirar a ${name} de la célula?\n\nDeja de pertenecer al grupo, pero conserva su cuenta y su historial de asistencia.`
+                        )
+                      ) {
+                        remove.mutate(member.id);
+                      }
+                    }}
+                    className="p-1.5 rounded-lg text-crema text-opacity-40 hover:text-error-red hover:bg-error-red hover:bg-opacity-10 transition-all shrink-0"
+                  >
+                    <UserMinus size={14} />
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -702,6 +744,224 @@ const FollowUpsTab: React.FC<TabProps> = ({ cellId, members, canManage, onDone, 
     </div>
   );
 };
+
+// ── Informes de actividad ───────────────────────────────────────────────────
+
+interface ReportsTabProps {
+  cellId: number;
+  canManage: boolean;
+  onDone: (text: string) => void;
+  onError: (err: any) => void;
+}
+
+/**
+ * Informes que el líder envía sobre cómo le fue con su célula.
+ *
+ * Quien lidera redacta y envía; quien supervisa lee y responde. Un informe
+ * enviado queda cerrado, para que lo que se revisa sea lo que se entregó.
+ */
+const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onError }) => {
+  const { can } = usePermissions();
+  const canWrite = canManage && can('CELL_REPORTS_CREATE');
+  const canReview = can('CELL_REPORTS_REVIEW');
+
+  const [showForm, setShowForm] = useState(false);
+  const [answering, setAnswering] = useState<number | null>(null);
+  const [answer, setAnswer] = useState('');
+  const [form, setForm] = useState({
+    period_start: '',
+    period_end: '',
+    summary: '',
+    highlights: '',
+    challenges: '',
+    prayer_needs: '',
+  });
+
+  const { data: reports } = useQuery<{ results: CellReport[] }>({
+    queryKey: ['cell-reports', cellId],
+    queryFn: async () => (await apiClient.get('/cell-reports/', { params: { cell: cellId } })).data,
+  });
+
+  const create = useMutation({
+    mutationFn: async () => apiClient.post('/cell-reports/', { cell: cellId, ...form }),
+    onSuccess: () => {
+      onDone('Informe guardado como borrador. Revísalo y envíalo cuando esté listo.');
+      setForm({ period_start: '', period_end: '', summary: '', highlights: '', challenges: '', prayer_needs: '' });
+      setShowForm(false);
+    },
+    onError,
+  });
+
+  const send = useMutation({
+    mutationFn: async (id: number) => apiClient.post(`/cell-reports/${id}/send/`),
+    onSuccess: () => onDone('Informe enviado a tu supervisión.'),
+    onError,
+  });
+
+  const review = useMutation({
+    mutationFn: async (id: number) =>
+      apiClient.post(`/cell-reports/${id}/review/`, { review_notes: answer.trim() }),
+    onSuccess: () => {
+      onDone('Informe revisado.');
+      setAnswering(null);
+      setAnswer('');
+    },
+    onError,
+  });
+
+  return (
+    <div className="space-y-4">
+      {canWrite && (
+        <div className="flex justify-end">
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="flex items-center gap-2 btn-primary text-xs font-bold"
+          >
+            <Plus size={14} />
+            {showForm ? 'Cancelar' : 'Nuevo informe'}
+          </button>
+        </div>
+      )}
+
+      {showForm && canWrite && (
+        <div className="glass-panel p-5 space-y-3">
+          <h3 className="text-sm font-bold text-crema">¿Cómo le fue a tu célula?</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Desde *" type="date" value={form.period_start} onChange={(v) => setForm({ ...form, period_start: v })} />
+            <Field label="Hasta *" type="date" value={form.period_end} onChange={(v) => setForm({ ...form, period_end: v })} />
+          </div>
+          <Field label="Resumen del periodo *" value={form.summary} onChange={(v) => setForm({ ...form, summary: v })} multiline />
+          <Field label="Lo más destacado" value={form.highlights} onChange={(v) => setForm({ ...form, highlights: v })} multiline />
+          <Field label="Dificultades" value={form.challenges} onChange={(v) => setForm({ ...form, challenges: v })} multiline />
+          <Field label="Motivos de oración" value={form.prayer_needs} onChange={(v) => setForm({ ...form, prayer_needs: v })} multiline />
+          <p className="text-[10px] text-crema text-opacity-40">
+            Las cifras del periodo (reuniones, asistencia media e integrantes nuevos) se calculan
+            solas al enviar el informe.
+          </p>
+          <button
+            onClick={() => create.mutate()}
+            disabled={create.isPending || !form.period_start || !form.period_end || !form.summary.trim()}
+            className="btn-primary text-xs font-bold disabled:opacity-40"
+          >
+            {create.isPending ? 'Guardando…' : 'Guardar borrador'}
+          </button>
+        </div>
+      )}
+
+      {!reports?.results?.length ? (
+        <div className="glass-panel p-8 text-center text-xs text-crema text-opacity-45">
+          Todavía no hay informes de esta célula.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {reports.results.map((report) => (
+            <div key={report.id} className="glass-panel p-5 space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-crema">
+                    {formatDate(report.period_start)} — {formatDate(report.period_end)}
+                  </p>
+                  {report.submitted_by && (
+                    <p className="text-[10px] text-crema text-opacity-45 mt-0.5">
+                      Por {report.submitted_by.full_name || report.submitted_by.email}
+                    </p>
+                  )}
+                </div>
+                <span className={`text-[10px] px-2.5 py-1 rounded-full border ${REPORT_STATUS[report.status].classes}`}>
+                  {REPORT_STATUS[report.status].label}
+                </span>
+              </div>
+
+              {report.status !== 'DRAFT' && (
+                <div className="grid grid-cols-3 gap-2">
+                  <MiniStat label="Reuniones" value={report.meetings_held} />
+                  <MiniStat label="Asistencia media" value={report.average_attendance} />
+                  <MiniStat label="Nuevos" value={report.new_members} />
+                </div>
+              )}
+
+              <div className="space-y-2 text-[11px] leading-relaxed">
+                <Block title="Resumen" text={report.summary} />
+                <Block title="Lo destacado" text={report.highlights} />
+                <Block title="Dificultades" text={report.challenges} />
+                <Block title="Motivos de oración" text={report.prayer_needs} />
+              </div>
+
+              {report.review_notes && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <p className="text-[10px] font-bold text-emerald-400 mb-1">
+                    Respuesta de {report.reviewed_by?.full_name || 'la supervisión'}
+                  </p>
+                  <p className="text-[11px] text-crema text-opacity-80">{report.review_notes}</p>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                {report.status === 'DRAFT' && canWrite && (
+                  <button
+                    onClick={() => send.mutate(report.id)}
+                    disabled={send.isPending}
+                    className="flex items-center gap-2 btn-primary text-xs font-bold disabled:opacity-40"
+                  >
+                    <Send size={13} />
+                    Enviar informe
+                  </button>
+                )}
+
+                {report.status === 'SENT' && canReview && (
+                  <button
+                    onClick={() => setAnswering(answering === report.id ? null : report.id)}
+                    className="text-[11px] px-3 py-2 rounded-lg bg-white bg-opacity-5 hover:bg-opacity-10 text-crema font-semibold"
+                  >
+                    {answering === report.id ? 'Cancelar' : 'Responder informe'}
+                  </button>
+                )}
+              </div>
+
+              {answering === report.id && canReview && (
+                <div className="space-y-2 pt-1">
+                  <textarea
+                    rows={3}
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    placeholder="Tu respuesta al líder…"
+                    className="w-full px-3.5 py-2.5 bg-deep-teal bg-opacity-40 border border-white border-opacity-10 rounded-xl text-white placeholder-crema placeholder-opacity-30 text-xs focus:outline-none focus:border-dorado resize-none"
+                  />
+                  <button
+                    onClick={() => review.mutate(report.id)}
+                    disabled={review.isPending}
+                    className="btn-primary text-xs font-bold disabled:opacity-40"
+                  >
+                    {review.isPending ? 'Guardando…' : 'Marcar como revisado'}
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+function Block({ title, text }: { title: string; text: string }) {
+  if (!text) return null;
+  return (
+    <div>
+      <p className="text-[10px] font-bold text-dorado uppercase tracking-wide">{title}</p>
+      <p className="text-crema text-opacity-75 mt-0.5 whitespace-pre-line">{text}</p>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="p-2.5 rounded-xl bg-deep-teal bg-opacity-40 border border-white border-opacity-5 text-center">
+      <p className="text-[9px] text-crema text-opacity-45 uppercase tracking-wide">{label}</p>
+      <p className="text-base font-extrabold text-dorado">{value}</p>
+    </div>
+  );
+}
 
 // ── Estadísticas y comunicados ──────────────────────────────────────────────
 

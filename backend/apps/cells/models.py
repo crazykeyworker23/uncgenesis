@@ -171,3 +171,70 @@ class MemberFollowUp(models.Model):
 
     def __str__(self):
         return f"{self.member.email} - {self.get_type_display()} ({self.date})"
+
+
+class CellReportStatus(models.TextChoices):
+    DRAFT = 'DRAFT', 'Borrador'
+    SENT = 'SENT', 'Enviado'
+    REVIEWED = 'REVIEWED', 'Revisado'
+
+
+class CellReport(models.Model):
+    """
+    Informe de actividad que el líder envía sobre su célula.
+
+    Cierra el ciclo de supervisión: el líder cuenta cómo le fue en el periodo,
+    y su coordinador —o el pastorado— lo lee y responde. Junto al texto se
+    guarda una foto de las cifras del periodo, para que el informe siga siendo
+    fiel aunque los datos cambien después.
+    """
+
+    cell = models.ForeignKey(CellGroup, on_delete=models.CASCADE, related_name='reports')
+    period_start = models.DateField()
+    period_end = models.DateField()
+
+    summary = models.TextField(verbose_name='cómo le fue a la célula')
+    highlights = models.TextField(blank=True, verbose_name='lo más destacado')
+    challenges = models.TextField(blank=True, verbose_name='dificultades')
+    prayer_needs = models.TextField(blank=True, verbose_name='motivos de oración')
+
+    # Cifras del periodo, congeladas al enviar el informe.
+    meetings_held = models.PositiveIntegerField(default=0)
+    average_attendance = models.FloatField(default=0)
+    new_members = models.PositiveIntegerField(default=0)
+
+    status = models.CharField(
+        max_length=20,
+        choices=CellReportStatus.choices,
+        default=CellReportStatus.DRAFT,
+        db_index=True
+    )
+    submitted_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='submitted_cell_reports'
+    )
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    reviewed_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_cell_reports'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(blank=True, verbose_name='respuesta del coordinador')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-period_end', '-created_at']
+        verbose_name = 'informe de célula'
+        verbose_name_plural = 'informes de célula'
+
+    def __str__(self):
+        return f"{self.cell.name} · {self.period_start} a {self.period_end}"

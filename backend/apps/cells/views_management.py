@@ -27,6 +27,8 @@ from .models import (
     AttendanceStatus,
     CellGroup,
     CellMeeting,
+    CellReport,
+    CellReportStatus,
     MemberFollowUp,
 )
 from .serializers_management import (
@@ -34,6 +36,8 @@ from .serializers_management import (
     AttendanceSerializer,
     CellMeetingSerializer,
     CellMemberRegistrationSerializer,
+    CellReportReviewSerializer,
+    CellReportSerializer,
     MemberFollowUpSerializer,
 )
 
@@ -201,6 +205,137 @@ class MemberFollowUpViewSet(ScopedCellResourceMixin, viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
+class CellReportViewSet(ScopedCellResourceMixin, viewsets.ModelViewSet):
+    """
+    Informes de actividad de la célula.
+
+    El líder redacta cómo le fue en el periodo y lo envía; su coordinador —o el
+    pastorado— lo lee y responde. Un informe enviado ya no se edita, para que
+    lo que se revisa sea lo que se entregó.
+    """
+
+    queryset = CellReport.objects.select_related('cell', 'submitted_by', 'reviewed_by')
+    serializer_class = CellReportSerializer
+    filterset_fields = ['cell', 'status']
+    ordering = ['-period_end']
+
+    perm_map = {
+        'list': 'CELL_REPORTS_VIEW',
+        'retrieve': 'CELL_REPORTS_VIEW',
+        'create': 'CELL_REPORTS_CREATE',
+        'update': 'CELL_REPORTS_CREATE',
+        'partial_update': 'CELL_REPORTS_CREATE',
+        'destroy': 'CELL_REPORTS_CREATE',
+        'send': 'CELL_REPORTS_CREATE',
+        'review': 'CELL_REPORTS_REVIEW',
+    }
+
+    def create(self, request, *args, **kwargs):
+        cell_id = request.data.get('cell')
+        if not can_manage_cell(request.user, int(cell_id) if cell_id else None):
+            return self._deny_out_of_scope()
+        return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        serializer.save(submitted_by=self.request.user)
+
+    def _guard_editable(self, request):
+        """Un informe ya enviado o revisado queda cerrado."""
+        report = self.get_object()
+
+        if not can_manage_cell(request.user, report.cell_id):
+            return self._deny_out_of_scope()
+
+        if report.status != CellReportStatus.DRAFT:
+            return Response(
+                {"error": "Este informe ya fue enviado y no se puede modificar."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
+    def update(self, request, *args, **kwargs):
+        blocked = self._guard_editable(request)
+        return blocked or super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        blocked = self._guard_editable(request)
+        return blocked or super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        blocked = self._guard_editable(request)
+        return blocked or super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=['post'])
+    def send(self, request, pk=None):
+        """
+        Envía el informe a la supervisión.
+
+        Al enviarlo se congelan las cifras del periodo: si más adelante se
+        corrige una asistencia, el informe entregado no cambia.
+        """
+        report = self.get_object()
+
+        if not can_manage_cell(request.user, report.cell_id):
+            return self._deny_out_of_scope()
+
+        if report.status != CellReportStatus.DRAFT:
+            return Response(
+                {"error": "Este informe ya fue enviado."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        meetings = report.cell.meetings.filter(
+            date__gte=report.period_start, date__lte=report.period_end
+        )
+        meetings_held = meetings.count()
+        attended = Attendance.objects.filter(
+            meeting__in=meetings,
+            status__in=[AttendanceStatus.PRESENT, AttendanceStatus.LATE],
+        ).count()
+
+        report.meetings_held = meetings_held
+        report.average_attendance = round(attended / meetings_held, 1) if meetings_held else 0
+        report.new_members = report.cell.members.filter(
+            created_at__date__gte=report.period_start,
+            created_at__date__lte=report.period_end,
+        ).count()
+        report.status = CellReportStatus.SENT
+        report.sent_at = timezone.now()
+        report.submitted_by = report.submitted_by or request.user
+        report.save()
+
+        return Response(self.get_serializer(report).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
+    def review(self, request, pk=None):
+        """
+        Marca el informe como revisado y deja la respuesta de la supervisión.
+
+        Lo hace quien supervisa la célula, no quien la lidera.
+        """
+        report = self.get_object()
+
+        if not can_reach_cell(request.user, report.cell_id):
+            return self._deny_out_of_scope()
+
+        if report.status == CellReportStatus.DRAFT:
+            return Response(
+                {"error": "Este informe todavía no ha sido enviado."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = CellReportReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        report.review_notes = serializer.validated_data.get('review_notes', '')
+        report.reviewed_by = request.user
+        report.reviewed_at = timezone.now()
+        report.status = CellReportStatus.REVIEWED
+        report.save()
+
+        return Response(self.get_serializer(report).data, status=status.HTTP_200_OK)
+
+
 def build_cell_statistics(cell):
     """Indicadores de una célula: composición, asistencia y seguimiento."""
     members = cell.members.all()
@@ -305,6 +440,51 @@ class CellManagementMixin:
                 for a in attendances.order_by('-meeting__date')
             ],
         })
+
+    @action(detail=True, methods=['post'], url_path='remove-member')
+    def remove_member(self, request, pk=None):
+        """
+        Retira a una persona de la célula.
+
+        No la elimina del sistema: sólo deja de pertenecer al grupo, conserva su
+        cuenta y su historial de asistencia. El borrado definitivo sigue siendo
+        atribución de la administración de cuentas.
+        """
+        from apps.roles.utils import has_any_permission
+
+        cell = self.get_object()
+
+        if not can_manage_cell(request.user, cell.id):
+            return Response(
+                {"error": "Sólo puedes retirar integrantes de las células que tienes a tu cargo."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not has_any_permission(request.user, ['MEMBERS_REMOVE']):
+            return Response(
+                {"error": "Tu rol no puede retirar integrantes."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        member_id = request.data.get('member_id')
+        person = cell.members.filter(id=member_id).first()
+        if person is None:
+            return Response(
+                {"error": "Esa persona no pertenece a esta célula."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        person.assigned_cell = None
+        person.save(update_fields=['assigned_cell'])
+
+        name = f"{person.first_name} {person.last_name}".strip() or person.email
+        return Response(
+            {
+                'id': person.id,
+                'detail': f'{name} ya no pertenece a {cell.name}. Su cuenta y su historial se conservan.',
+            },
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=['post'], url_path='register-member')
     def register_member(self, request, pk=None):

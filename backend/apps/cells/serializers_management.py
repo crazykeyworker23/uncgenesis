@@ -8,6 +8,7 @@ from .models import (
     AttendanceStatus,
     CellGroup,
     CellMeeting,
+    CellReport,
     MemberFollowUp,
 )
 
@@ -148,3 +149,48 @@ class CellStatisticsSerializer(serializers.Serializer):
     attendance_by_status = serializers.DictField()
     attendance_trend = serializers.ListField()
     needs_attention = serializers.IntegerField()
+
+
+class CellReportSerializer(serializers.ModelSerializer):
+    """Informe de actividad que el líder envía sobre su célula."""
+
+    cell_name = serializers.CharField(source='cell.name', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    submitted_by = PersonBriefSerializer(read_only=True)
+    reviewed_by = PersonBriefSerializer(read_only=True)
+
+    class Meta:
+        model = CellReport
+        fields = [
+            'id', 'cell', 'cell_name',
+            'period_start', 'period_end',
+            'summary', 'highlights', 'challenges', 'prayer_needs',
+            'meetings_held', 'average_attendance', 'new_members',
+            'status', 'status_display',
+            'submitted_by', 'sent_at',
+            'reviewed_by', 'reviewed_at', 'review_notes',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'cell_name', 'status', 'status_display',
+            'meetings_held', 'average_attendance', 'new_members',
+            'submitted_by', 'sent_at',
+            'reviewed_by', 'reviewed_at', 'review_notes',
+            'created_at', 'updated_at',
+        ]
+
+    def validate(self, attrs):
+        start = attrs.get('period_start') or getattr(self.instance, 'period_start', None)
+        end = attrs.get('period_end') or getattr(self.instance, 'period_end', None)
+
+        if start and end and start > end:
+            raise serializers.ValidationError({
+                'period_end': 'La fecha final del periodo no puede ser anterior a la inicial.'
+            })
+        return attrs
+
+
+class CellReportReviewSerializer(serializers.Serializer):
+    """Respuesta del coordinador o del pastorado a un informe recibido."""
+
+    review_notes = serializers.CharField(required=False, allow_blank=True)
