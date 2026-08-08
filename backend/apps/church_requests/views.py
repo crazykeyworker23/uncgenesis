@@ -14,26 +14,30 @@ from .serializers import (
     ChangeStatusSerializer,
 )
 
+# Los codenames deben coincidir con el catálogo de apps/roles. Antes se exigían
+# PRAYER_* y VISITOR_*, que no existen en ninguna parte: como HasAppPermission
+# sólo concede lo que está asignado, el rol de Soporte y Consejería —cuyo
+# trabajo es justamente atender estas solicitudes— no podía ni listarlas.
 PRAYER_PERM_MAP = {
-    'list':           'PRAYER_VIEW',
-    'retrieve':       'PRAYER_VIEW',
+    'list':           'REQUESTS_VIEW',
+    'retrieve':       'REQUESTS_VIEW',
     'create':         None,   # public
-    'update':         'PRAYER_EDIT',
-    'partial_update': 'PRAYER_EDIT',
-    'destroy':        'PRAYER_DELETE',
-    'assign':         'PRAYER_EDIT',
-    'change_status':  'PRAYER_EDIT',
+    'update':         'REQUESTS_RESPOND',
+    'partial_update': 'REQUESTS_RESPOND',
+    'destroy':        'REQUESTS_DELETE',
+    'assign':         'REQUESTS_ASSIGN',
+    'change_status':  'REQUESTS_RESPOND',
 }
 
 VISITOR_PERM_MAP = {
-    'list':           'VISITOR_VIEW',
-    'retrieve':       'VISITOR_VIEW',
+    'list':           'REQUESTS_VIEW',
+    'retrieve':       'REQUESTS_VIEW',
     'create':         None,   # public
-    'update':         'VISITOR_EDIT',
-    'partial_update': 'VISITOR_EDIT',
-    'destroy':        'VISITOR_DELETE',
-    'assign':         'VISITOR_EDIT',
-    'change_status':  'VISITOR_EDIT',
+    'update':         'REQUESTS_RESPOND',
+    'partial_update': 'REQUESTS_RESPOND',
+    'destroy':        'REQUESTS_DELETE',
+    'assign':         'REQUESTS_ASSIGN',
+    'change_status':  'REQUESTS_RESPOND',
 }
 
 

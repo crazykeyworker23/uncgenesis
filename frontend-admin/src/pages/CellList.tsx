@@ -15,6 +15,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { Can } from '../components/auth/Can';
 import { CellGroup, CellStatus, MeetingDay, MEETING_DAY_LABELS, PaginatedCells } from '../features/cells/types';
 
 const STATUS_CONFIG: Record<CellStatus, { label: string; classes: string }> = {
@@ -76,6 +77,7 @@ export const CellList: React.FC = () => {
             {data?.count ?? 0} grupos registrados en total
           </p>
         </div>
+        <Can permission="CELLS_CREATE">
         <Link
           to="/celulas/nueva"
           className="inline-flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg text-sm font-medium transition-colors"
@@ -83,6 +85,7 @@ export const CellList: React.FC = () => {
           <Plus className="w-4 h-4" />
           Nueva Célula
         </Link>
+        </Can>
       </div>
 
       {/* Filters */}

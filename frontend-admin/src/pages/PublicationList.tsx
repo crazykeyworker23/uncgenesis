@@ -15,6 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { Can } from '../components/auth/Can';
 import { Publication, PublicationStatus, PublicationContentType } from '../features/publications/types';
 
 export const PublicationList: React.FC = () => {
@@ -104,6 +105,7 @@ export const PublicationList: React.FC = () => {
           <h1 className="text-2xl font-extrabold text-crema leading-none">Publicaciones</h1>
           <p className="text-xs text-crema text-opacity-50 mt-1.5">Redacta, edita y programa contenido oficial para Génesis App.</p>
         </div>
+        <Can permission="PUBLICATIONS_CREATE">
         <Link 
           to="/publicaciones/nueva" 
           className="flex items-center justify-center gap-2 btn-primary text-xs font-bold self-start sm:self-center"
@@ -111,6 +113,7 @@ export const PublicationList: React.FC = () => {
           <Plus size={16} />
           Nueva Publicación
         </Link>
+        </Can>
       </div>
 
       {/* Filters Bar */}
@@ -262,7 +265,8 @@ export const PublicationList: React.FC = () => {
                     {/* Inline Actions */}
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
-                        <Link 
+                        <Can permission="PUBLICATIONS_EDIT">
+                          <Link 
                           to={`/publicaciones/${pub.id}/editar`}
                           className="p-2 bg-white/5 hover:bg-dorado/20 text-crema hover:text-dorado border border-white/10 rounded-xl transition-all flex items-center gap-1 text-xs font-semibold"
                           title="Editar Publicación"
@@ -270,6 +274,7 @@ export const PublicationList: React.FC = () => {
                           <Edit size={14} />
                           <span className="hidden xl:inline">Editar</span>
                         </Link>
+                        </Can>
 
                         {pub.status !== 'PUBLISHED' && (
                           <button
@@ -293,15 +298,18 @@ export const PublicationList: React.FC = () => {
                           </button>
                         )}
 
-                        <button
+                        <Can permission="PUBLICATIONS_CREATE">
+                          <button
                           onClick={() => duplicateMutation.mutate(pub.id)}
                           className="p-2 bg-white/5 hover:bg-white/10 text-crema/70 hover:text-crema border border-white/10 rounded-xl transition-all flex items-center gap-1 text-xs font-semibold"
                           title="Duplicar"
                         >
                           <Copy size={14} />
                         </button>
+                        </Can>
 
-                        <button
+                        <Can permission="PUBLICATIONS_DELETE">
+                          <button
                           onClick={() => {
                             if (window.confirm('¿Seguro que deseas eliminar esta publicación?')) {
                               deleteMutation.mutate(pub.id);
@@ -312,6 +320,7 @@ export const PublicationList: React.FC = () => {
                         >
                           <Trash2 size={14} />
                         </button>
+                        </Can>
                       </div>
                     </td>
                   </tr>

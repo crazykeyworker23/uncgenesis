@@ -6,6 +6,7 @@ import {
   Lock, Unlock, ArrowLeft, ArrowRight, AlertCircle
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { Can } from '../components/auth/Can';
 import { User, PaginatedUsers, USER_STATUS_CONFIG } from '../features/users/types';
 import { ROLE_LABELS, ROLE_BADGE_COLORS } from '../features/roles/types';
 
@@ -78,6 +79,7 @@ export const UserList: React.FC = () => {
             {data?.count ?? 0} cuentas registradas en total
           </p>
         </div>
+        <Can permission="USERS_EDIT">
         <Link
           to="/usuarios/nuevo"
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-sm font-semibold transition-all shadow"
@@ -85,6 +87,7 @@ export const UserList: React.FC = () => {
           <UserPlus className="w-4 h-4" />
           Registrar Usuario
         </Link>
+        </Can>
       </div>
 
       {/* Filters */}

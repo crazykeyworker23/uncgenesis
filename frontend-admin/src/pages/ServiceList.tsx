@@ -17,6 +17,7 @@ import {
   Eye
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { Can } from '../components/auth/Can';
 import { ChurchService, ServiceStatus } from '../features/services/types';
 
 export const ServiceList: React.FC = () => {
@@ -92,6 +93,7 @@ export const ServiceList: React.FC = () => {
           <h1 className="text-2xl font-extrabold text-crema leading-none">Servicios Religiosos</h1>
           <p className="text-xs text-crema text-opacity-50 mt-1.5">Administra las prédicas dominicales, versículos leídos y transmisiones en vivo.</p>
         </div>
+        <Can permission="SERVICES_CREATE">
         <Link 
           to="/servicios/nuevo" 
           className="flex items-center justify-center gap-2 btn-primary text-xs font-bold self-start sm:self-center"
@@ -99,6 +101,7 @@ export const ServiceList: React.FC = () => {
           <Plus size={16} />
           Registrar Culto
         </Link>
+        </Can>
       </div>
 
       {/* Filters Bar */}
@@ -293,7 +296,8 @@ export const ServiceList: React.FC = () => {
                             <Copy size={14} />
                           </button>
 
-                          <button
+                          <Can permission="SERVICES_DELETE">
+                            <button
                             onClick={() => {
                               if (window.confirm('¿Seguro que deseas eliminar este servicio?')) {
                                 deleteMutation.mutate(serv.id);
@@ -304,6 +308,7 @@ export const ServiceList: React.FC = () => {
                           >
                             <Trash2 size={14} />
                           </button>
+                          </Can>
                         </div>
                       </td>
                   </tr>

@@ -6,6 +6,7 @@ import {
   AlertTriangle, CheckCircle2, Clock, Users, ArrowLeft, ArrowRight
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { Can } from '../components/auth/Can';
 import {
   Notification, TARGET_AUDIENCE_LABELS,
   NOTIFICATION_STATUS_CONFIG, PaginatedNotifications
@@ -259,6 +260,7 @@ export const NotificationList: React.FC = () => {
             {data?.count ?? 0} notificaciones enviadas o programadas
           </p>
         </div>
+        <Can permission="NOTIFICATIONS_CREATE">
         <Link
           to="/notificaciones/nueva"
           className="inline-flex items-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-sm font-semibold transition-all shadow"
@@ -266,6 +268,7 @@ export const NotificationList: React.FC = () => {
           <Plus className="w-4 h-4" />
           Nueva Notificación
         </Link>
+        </Can>
       </div>
 
       {/* Filters */}
@@ -435,7 +438,8 @@ export const NotificationList: React.FC = () => {
                               <span>Enviar</span>
                             </button>
                           )}
-                          <button
+                          <Can permission="NOTIFICATIONS_DELETE">
+                            <button
                             id={`delete-btn-${item.id}`}
                             onClick={() => handleDelete(item)}
                             className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold"
@@ -443,6 +447,7 @@ export const NotificationList: React.FC = () => {
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
+                          </Can>
                         </div>
                       </td>
                     </tr>

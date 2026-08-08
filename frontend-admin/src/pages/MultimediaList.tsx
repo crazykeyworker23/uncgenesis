@@ -5,6 +5,7 @@ import {
   Copy, Check, X, Upload, AlertCircle, ArrowLeft, ArrowRight, ExternalLink
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { Can } from '../components/auth/Can';
 import {
   Multimedia, MediaType, PaginatedMultimedia,
   MEDIA_TYPE_LABELS, MEDIA_TYPE_COLORS
@@ -368,7 +369,8 @@ export const MultimediaList: React.FC = () => {
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                     </a>
-                    <button
+                    <Can permission="MEDIA_DELETE">
+                      <button
                       id={`delete-media-btn-${item.id}`}
                       onClick={() => handleDelete(item)}
                       className="p-1.5 bg-red-950/20 hover:bg-red-500/10 border border-red-950/30 hover:border-red-500/20 rounded-lg text-red-400 transition-all flex items-center justify-center"
@@ -376,6 +378,7 @@ export const MultimediaList: React.FC = () => {
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
+                    </Can>
                   </div>
                 </div>
               </div>

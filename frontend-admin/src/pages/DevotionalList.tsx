@@ -16,6 +16,7 @@ import {
   BookOpen
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { Can } from '../components/auth/Can';
 import { Devotional, DevotionalStatus } from '../features/devotionals/types';
 
 export const DevotionalList: React.FC = () => {
@@ -89,6 +90,7 @@ export const DevotionalList: React.FC = () => {
           <h1 className="text-2xl font-extrabold text-crema leading-none">Devocionales Diarios</h1>
           <p className="text-xs text-crema text-opacity-50 mt-1.5">Redacta y programa las lecturas y reflexiones del devocional diario para la comunidad.</p>
         </div>
+        <Can permission="DEVOTIONALS_CREATE">
         <Link 
           to="/devocionales/nuevo" 
           className="flex items-center justify-center gap-2 btn-primary text-xs font-bold self-start sm:self-center"
@@ -96,6 +98,7 @@ export const DevotionalList: React.FC = () => {
           <Plus size={16} />
           Nuevo Devocional
         </Link>
+        </Can>
       </div>
 
       {/* Filters Bar */}
@@ -266,7 +269,8 @@ export const DevotionalList: React.FC = () => {
                             <Copy size={14} />
                           </button>
 
-                          <button
+                          <Can permission="DEVOTIONALS_DELETE">
+                            <button
                             onClick={() => {
                               if (window.confirm('¿Seguro que deseas eliminar este devocional?')) {
                                 deleteMutation.mutate(dev.id);
@@ -277,6 +281,7 @@ export const DevotionalList: React.FC = () => {
                           >
                             <Trash2 size={14} />
                           </button>
+                          </Can>
                         </div>
                       </td>
                   </tr>

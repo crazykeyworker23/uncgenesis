@@ -163,7 +163,11 @@ class ReportsExportAPIView(APIView):
 
 
 class DashboardStatsAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    # Antes bastaba con estar autenticado, así que cualquier miembro de la
+    # comunidad podía leer desde la app el total de usuarios, las solicitudes
+    # pendientes y el resto de cifras internas de la iglesia.
+    permission_classes = [IsAuthenticated, HasAppPermission]
+    required_permission = 'REPORTS_VIEW'
 
     def get(self, request, *args, **kwargs):
         # 1. KPIs

@@ -26,6 +26,8 @@ import {
   Bar
 } from 'recharts';
 import { apiClient } from '../api/client';
+import { usePermissions } from '../store/authStore';
+import { Can } from '../components/auth/Can';
 
 interface DashboardData {
   kpis: {
@@ -47,12 +49,18 @@ interface DashboardData {
 }
 
 export const Dashboard: React.FC = () => {
+  const { can } = usePermissions();
+  // Las cifras de la iglesia son información de reportes: sólo se piden si el
+  // rol puede verlas, de modo que un líder o consejero no reciba un 403.
+  const canSeeStats = can('REPORTS_VIEW');
+
   const { data, isLoading } = useQuery<DashboardData>({
     queryKey: ['dashboard-stats'],
     queryFn: async () => {
       const res = await apiClient.get('/reports/dashboard/');
       return res.data;
     },
+    enabled: canSeeStats,
   });
 
   const stats = [
@@ -62,12 +70,14 @@ export const Dashboard: React.FC = () => {
     { name: 'Solicitudes Pendientes', value: data?.kpis?.pending_requests ?? 0, change: `${data?.kpis?.urgent_requests ?? 0} oraciones`, icon: MessageSquare, color: 'text-error-red' },
   ];
 
+  // Cada acceso directo declara el permiso que lo habilita: el rol sólo ve
+  // los atajos de lo que realmente puede hacer.
   const quickActions = [
-    { title: 'Nueva Publicación', desc: 'Redactar noticia, artículo o boletín', icon: Plus, color: 'bg-dorado text-deep-teal', link: '/publicaciones/nueva' },
-    { title: 'Programar Notificación', desc: 'Enviar push global o a grupo', icon: Send, color: 'bg-teal-500 text-deep-teal', link: '/notificaciones' },
-    { title: 'Crear Devocional', desc: 'Agregar estudio diario o audio', icon: BookOpen, color: 'bg-blue-500 text-crema', link: '/devocionales/nuevo' },
-    { title: 'Nuevo Servicio', desc: 'Publicar prédica, audios y versos', icon: Sparkles, color: 'bg-purple-500 text-crema', link: '/servicios/nuevo' },
-  ];
+    { title: 'Nueva Publicación', desc: 'Redactar noticia, artículo o boletín', icon: Plus, color: 'bg-dorado text-deep-teal', link: '/publicaciones/nueva', permission: 'PUBLICATIONS_CREATE' },
+    { title: 'Programar Notificación', desc: 'Enviar push global o a grupo', icon: Send, color: 'bg-teal-500 text-deep-teal', link: '/notificaciones', permission: 'NOTIFICATIONS_CREATE' },
+    { title: 'Crear Devocional', desc: 'Agregar estudio diario o audio', icon: BookOpen, color: 'bg-blue-500 text-crema', link: '/devocionales/nuevo', permission: 'DEVOTIONALS_CREATE' },
+    { title: 'Nuevo Servicio', desc: 'Publicar prédica, audios y versos', icon: Sparkles, color: 'bg-purple-500 text-crema', link: '/servicios/nuevo', permission: 'SERVICES_CREATE' },
+  ].filter((action) => can(action.permission));
 
   const activityChartData = data?.activity_data?.length ? data.activity_data : [
     { name: 'Ene', visitas: 0, registros: 0 },
@@ -96,6 +106,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* KPI Cards Grid */}
+      <Can permission="REPORTS_VIEW">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => {
           const Icon = stat.icon;
@@ -119,8 +130,10 @@ export const Dashboard: React.FC = () => {
           );
         })}
       </div>
+      </Can>
 
       {/* Charts section */}
+      <Can permission="REPORTS_VIEW">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Activity Chart */}
         <div className="glass-panel p-5 lg:col-span-2 bg-dark-teal bg-opacity-20 flex flex-col h-[320px]">
@@ -186,10 +199,12 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+      </Can>
 
       {/* Quick Actions & Recent updates */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Quick Actions List */}
+        {quickActions.length > 0 && (
         <div className="glass-panel p-6 bg-dark-teal bg-opacity-20 space-y-4">
           <h3 className="text-sm font-bold text-crema leading-none">Acciones Rápidas</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -213,8 +228,10 @@ export const Dashboard: React.FC = () => {
             })}
           </div>
         </div>
+        )}
 
         {/* Recent Prayer/Visitor Requests */}
+        <Can permission="REQUESTS_VIEW">
         <div className="glass-panel p-6 bg-dark-teal bg-opacity-20 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-crema leading-none">Solicitudes Recientes</h3>
@@ -248,6 +265,7 @@ export const Dashboard: React.FC = () => {
             )}
           </div>
         </div>
+        </Can>
       </div>
     </div>
   );

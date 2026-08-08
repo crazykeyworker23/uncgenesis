@@ -17,6 +17,7 @@ import {
   Globe
 } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { Can } from '../components/auth/Can';
 import { Event, EventStatus } from '../features/events/types';
 
 export const EventList: React.FC = () => {
@@ -99,6 +100,7 @@ export const EventList: React.FC = () => {
           <h1 className="text-2xl font-extrabold text-crema leading-none">Eventos y Conferencias</h1>
           <p className="text-xs text-crema text-opacity-50 mt-1.5">Organiza eventos de la iglesia, talleres, conferencias y monitorea las inscripciones.</p>
         </div>
+        <Can permission="EVENTS_CREATE">
         <Link 
           to="/eventos/nuevo" 
           className="flex items-center justify-center gap-2 btn-primary text-xs font-bold self-start sm:self-center"
@@ -106,6 +108,7 @@ export const EventList: React.FC = () => {
           <Plus size={16} />
           Nuevo Evento
         </Link>
+        </Can>
       </div>
 
       {/* Filters Bar */}
@@ -303,7 +306,8 @@ export const EventList: React.FC = () => {
                             <Copy size={14} />
                           </button>
 
-                          <button
+                          <Can permission="EVENTS_DELETE">
+                            <button
                             onClick={() => {
                               if (window.confirm('¿Seguro que deseas eliminar este evento?')) {
                                 deleteMutation.mutate(evt.id);
@@ -314,6 +318,7 @@ export const EventList: React.FC = () => {
                           >
                             <Trash2 size={14} />
                           </button>
+                          </Can>
                         </div>
                       </td>
                     </tr>
