@@ -41,8 +41,8 @@ export default function AppRouter() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
 
-          {/* Vista propia del líder de célula */}
-          <Route element={<ProtectedRoute requiresLedCell />}>
+          {/* Gestión de célula: líder, coordinador y pastorado */}
+          <Route element={<ProtectedRoute requiresCellScope />}>
             <Route path="/mi-celula" element={<MyCell />} />
           </Route>
 

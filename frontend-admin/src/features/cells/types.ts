@@ -32,6 +32,9 @@ export interface CellGroup {
   slug: string;
   leader: CellLeader | null;
   leader_id?: number | null;
+  /** Supervisa esta célula junto a otras que tenga asignadas. */
+  coordinator?: CellLeader | null;
+  coordinator_id?: number | null;
   meeting_day: MeetingDay;
   meeting_time: string; // HH:MM:SS
   address: string;

@@ -9,10 +9,10 @@ interface ProtectedRouteProps {
    */
   permission?: string | string[];
   /**
-   * Sección propia del líder: exige tener al menos una célula a cargo, en
-   * lugar de un permiso del catálogo.
+   * Sección de gestión de célula: exige tener células a cargo (líder,
+   * coordinador o pastorado), en lugar de un permiso del catálogo.
    */
-  requiresLedCell?: boolean;
+  requiresCellScope?: boolean;
 }
 
 /**
@@ -22,7 +22,7 @@ interface ProtectedRouteProps {
  * secciones y sólo fallaba al llamar al backend. Ahora cada rol entra
  * únicamente a lo que le corresponde.
  */
-export function ProtectedRoute({ permission, requiresLedCell }: ProtectedRouteProps) {
+export function ProtectedRoute({ permission, requiresCellScope }: ProtectedRouteProps) {
   const { isAuthenticated, user } = useAuthStore();
 
   if (!isAuthenticated || !user) {
@@ -38,10 +38,15 @@ export function ProtectedRoute({ permission, requiresLedCell }: ProtectedRoutePr
     return <Navigate to="/login" replace />;
   }
 
-  // La sección del líder no depende del catálogo de permisos, sino de tener
-  // efectivamente una célula a cargo.
-  if (requiresLedCell && (user.leads_cells ?? 0) === 0) {
-    return <NoAccess />;
+  // La sección de célula no depende del catálogo de permisos, sino del
+  // alcance real: liderarla, coordinarla o abarcar toda la iglesia.
+  if (requiresCellScope) {
+    const scope = user.scope;
+    const hasCellScope =
+      (user.leads_cells ?? 0) > 0 ||
+      (scope?.coordinates_cell_ids?.length ?? 0) > 0 ||
+      Boolean(scope?.church_wide);
+    if (!hasCellScope) return <NoAccess />;
   }
 
   if (!userHasPermission(user, permission)) {

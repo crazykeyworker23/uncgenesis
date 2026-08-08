@@ -22,6 +22,17 @@ export interface UserProfile {
   can_access_admin?: boolean;
   /** Cuántas células tiene a su cargo: habilita la sección "Mi Célula". */
   leads_cells?: number;
+  /** Alcance de la sesión sobre las células. */
+  scope?: {
+    scope: string | null;
+    scope_label: string | null;
+    /** `true` cuando alcanza toda la iglesia (pastor y superadministrador). */
+    church_wide: boolean;
+    /** Células accesibles; `null` significa todas. */
+    cell_ids: number[] | null;
+    leads_cell_ids: number[];
+    coordinates_cell_ids: number[];
+  };
 }
 
 interface AuthState {
@@ -92,11 +103,36 @@ export function userHasPermission(
 export function usePermissions() {
   const user = useAuthStore((state) => state.user);
 
+  const scope = user?.scope;
+
   return {
     user,
     isSuperadmin: Boolean(user?.is_superadmin),
-    /** Lidera al menos una célula: habilita su vista propia. */
+    /** Tiene células a cargo: habilita la sección propia del líder. */
     leadsCells: (user?.leads_cells ?? 0) > 0,
+    /** Supervisa células como coordinador. */
+    coordinatesCells: (scope?.coordinates_cell_ids?.length ?? 0) > 0,
+    /** Alcanza toda la iglesia. */
+    churchWide: Boolean(scope?.church_wide),
+    /** Puede acceder a la sección de gestión de célula. */
+    hasCellScope:
+      (user?.leads_cells ?? 0) > 0 ||
+      (scope?.coordinates_cell_ids?.length ?? 0) > 0 ||
+      Boolean(scope?.church_wide),
+    /**
+     * Puede registrar datos en esa célula.
+     *
+     * Refleja la regla del backend: el pastor en todas, el coordinador en las
+     * asignadas y el líder en la suya. El servidor vuelve a comprobarlo.
+     */
+    canManageCell: (cellId?: number | null) => {
+      if (!cellId || !scope) return false;
+      if (scope.church_wide) return true;
+      return (
+        scope.leads_cell_ids.includes(cellId) ||
+        scope.coordinates_cell_ids.includes(cellId)
+      );
+    },
     can: (permission?: string | string[]) => userHasPermission(user, permission),
   };
 }

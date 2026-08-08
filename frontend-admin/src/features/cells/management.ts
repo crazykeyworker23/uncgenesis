@@ -1,0 +1,116 @@
+/** Tipos y etiquetas de la gestión interna de células. */
+
+export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
+
+export const ATTENDANCE_STATUS: Record<
+  AttendanceStatus,
+  { label: string; short: string; classes: string }
+> = {
+  PRESENT: {
+    label: 'Asistió',
+    short: 'A',
+    classes: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+  },
+  ABSENT: {
+    label: 'No asistió',
+    short: 'N',
+    classes: 'bg-red-500/20 text-red-300 border-red-500/40',
+  },
+  LATE: {
+    label: 'Tardanza',
+    short: 'T',
+    classes: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+  },
+  EXCUSED: {
+    label: 'Justificado',
+    short: 'J',
+    classes: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+  },
+};
+
+export const ATTENDANCE_ORDER: AttendanceStatus[] = ['PRESENT', 'LATE', 'EXCUSED', 'ABSENT'];
+
+export type FollowUpType = 'CALL' | 'VISIT' | 'MESSAGE' | 'OTHER';
+
+export const FOLLOW_UP_TYPES: Record<FollowUpType, string> = {
+  CALL: 'Llamada',
+  VISIT: 'Visita',
+  MESSAGE: 'Mensaje',
+  OTHER: 'Otro',
+};
+
+export interface CellMember {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  phone: string;
+  location: string;
+  status: string;
+}
+
+export interface MembersResponse {
+  cell: { id: number; name: string; slug: string };
+  count: number;
+  results: CellMember[];
+}
+
+export interface AttendanceRecord {
+  id: number;
+  member: CellMember;
+  status: AttendanceStatus;
+  status_display: string;
+  notes: string;
+}
+
+export interface CellMeeting {
+  id: number;
+  cell: number;
+  cell_name: string;
+  date: string;
+  time: string | null;
+  topic: string;
+  notes: string;
+  guests_count: number;
+  attendees_count: number;
+  attendances: AttendanceRecord[];
+  registered_by: CellMember | null;
+}
+
+export interface FollowUp {
+  id: number;
+  cell: number;
+  cell_name: string;
+  member: CellMember;
+  type: FollowUpType;
+  type_display: string;
+  date: string;
+  summary: string;
+  needs_attention: boolean;
+  registered_by: CellMember | null;
+}
+
+export interface CellStatistics {
+  cell: { id: number; name: string; slug: string };
+  members_total: number;
+  members_active: number;
+  members_inactive: number;
+  meetings_total: number;
+  average_attendance: number;
+  attendance_by_status: Record<AttendanceStatus, number>;
+  attendance_trend: Array<{ date: string; attendees: number; topic: string }>;
+  needs_attention: number;
+}
+
+/** `2026-08-05` → `5 de agosto de 2026` */
+export function formatDate(value?: string | null): string {
+  if (!value) return 'Sin fecha';
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString('es-PE', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}

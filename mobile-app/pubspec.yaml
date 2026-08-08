@@ -2,7 +2,9 @@ name: genesis_app
 description: "Génesis App - Aplicación Móvil Pública"
 publish_to: 'none'
 
-version: 1.0.0+1
+# El número tras el "+" es el versionCode de Android: debe subir en cada
+# entrega o el sistema rechaza la instalación como actualización.
+version: 1.1.0+2
 
 environment:
   sdk: ^3.11.5

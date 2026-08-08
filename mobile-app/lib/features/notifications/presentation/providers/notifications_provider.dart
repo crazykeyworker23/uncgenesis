@@ -146,9 +146,14 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
 
       // 2. Obtener el ID del usuario autenticado para la validación estricta.
       //    Se cachea por token: sólo se vuelve a pedir si la sesión cambió.
+      //
+      //    Se consulta /auth/me/, que es el perfil de la sesión. Antes se
+      //    pedía /users/me/, que pertenece a la administración de cuentas y
+      //    exige el permiso USERS_VIEW: devolvía 403 a cualquier miembro, así
+      //    que el identificador quedaba nulo y este filtro nunca se aplicaba.
       if (_cachedUserId == null || _cachedUserIdForToken != token) {
         try {
-          final meResponse = await dio.get('/users/me/');
+          final meResponse = await dio.get('/auth/me/');
           if (meResponse.statusCode == 200 && meResponse.data != null) {
             _cachedUserId = meResponse.data['id']?.toString();
             _cachedUserIdForToken = token;

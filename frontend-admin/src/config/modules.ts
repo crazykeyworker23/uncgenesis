@@ -15,15 +15,16 @@ export interface AdminModule {
   /** Permisos que habilitan crear o editar dentro de la sección. */
   writePermission?: string[];
   /**
-   * Sección propia del líder: se muestra a quien tiene una célula a cargo,
-   * sin depender de un permiso del catálogo.
+   * Sección de gestión de célula: se muestra a quien tiene células a cargo
+   * (líder, coordinador o pastorado), sin depender del catálogo de permisos
+   * sino del alcance real sobre los datos.
    */
-  requiresLedCell?: boolean;
+  requiresCellScope?: boolean;
 }
 
 export const ADMIN_MODULES: AdminModule[] = [
   { name: 'Dashboard', path: '/dashboard' },
-  { name: 'Mi Célula', path: '/mi-celula', requiresLedCell: true },
+  { name: 'Mi Célula', path: '/mi-celula', requiresCellScope: true },
   {
     name: 'Publicaciones',
     path: '/publicaciones',

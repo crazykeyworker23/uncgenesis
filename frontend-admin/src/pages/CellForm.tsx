@@ -125,6 +125,7 @@ const MobilePreview: React.FC<MobilePreviewProps> = ({ name, leaderName, day, ti
 interface FormData {
   name: string;
   leader_id: string;
+  coordinator_id: string;
   meeting_day: MeetingDay | '';
   meeting_time: string;
   address: string;
@@ -137,6 +138,7 @@ interface FormData {
 const EMPTY_FORM: FormData = {
   name: '',
   leader_id: '',
+  coordinator_id: '',
   meeting_day: '',
   meeting_time: '',
   address: '',
@@ -182,6 +184,7 @@ export const CellForm: React.FC = () => {
       setForm({
         name: existingCell.name,
         leader_id: existingCell.leader?.id?.toString() ?? '',
+        coordinator_id: existingCell.coordinator?.id?.toString() ?? '',
         meeting_day: existingCell.meeting_day,
         meeting_time: existingCell.meeting_time?.slice(0, 5) ?? '',
         address: existingCell.address,
@@ -244,6 +247,7 @@ export const CellForm: React.FC = () => {
       description: form.description.trim(),
       status: form.status,
       leader_id: form.leader_id ? parseInt(form.leader_id) : null,
+      coordinator_id: form.coordinator_id ? parseInt(form.coordinator_id) : null,
       latitude: form.latitude ? form.latitude : null,
       longitude: form.longitude ? form.longitude : null,
     };
@@ -322,6 +326,31 @@ export const CellForm: React.FC = () => {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Coordinador: nivel intermedio entre el pastorado y el líder.
+              Supervisa varias células y ve el desempeño de cada una. */}
+          <div>
+            <label htmlFor="cell-coordinator" className="block text-sm font-medium text-gray-300 mb-1.5">
+              <User className="inline w-4 h-4 mr-1 text-teal-400" />
+              Coordinador
+            </label>
+            <select
+              id="cell-coordinator"
+              value={form.coordinator_id}
+              onChange={(e) => handleChange('coordinator_id', e.target.value)}
+              className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 text-white rounded-lg text-sm focus:outline-none focus:border-teal-500 transition-colors"
+            >
+              <option value="">Sin coordinador asignado</option>
+              {users.map((u: { id: number; first_name: string; last_name: string; email: string }) => (
+                <option key={u.id} value={u.id}>
+                  {u.first_name} {u.last_name} ({u.email})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1.5">
+              Podrá supervisar esta célula: sus miembros, reuniones y seguimiento.
+            </p>
           </div>
 
           {/* Meeting Day & Time */}

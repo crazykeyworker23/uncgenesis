@@ -41,8 +41,16 @@ class CellReminderSerializer(serializers.Serializer):
 class CellGroupSerializer(serializers.ModelSerializer):
     leader = LeaderSerializer(read_only=True)
     leader_id = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.all(), 
-        source='leader', 
+        queryset=CustomUser.objects.all(),
+        source='leader',
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+    coordinator = LeaderSerializer(read_only=True)
+    coordinator_id = serializers.PrimaryKeyRelatedField(
+        queryset=CustomUser.objects.all(),
+        source='coordinator',
         write_only=True,
         required=False,
         allow_null=True
@@ -53,9 +61,10 @@ class CellGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = CellGroup
         fields = [
-            'id', 'name', 'slug', 'leader', 'leader_id', 
-            'meeting_day', 'meeting_time', 'address', 
-            'latitude', 'longitude', 'description', 
+            'id', 'name', 'slug', 'leader', 'leader_id',
+            'coordinator', 'coordinator_id',
+            'meeting_day', 'meeting_time', 'address',
+            'latitude', 'longitude', 'description',
             'status', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'slug', 'created_at', 'updated_at']

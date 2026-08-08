@@ -43,16 +43,24 @@ const MODULE_ICONS: Record<string, LucideIcon> = {
 export const AdminLayout: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuthStore();
-  const { can, leadsCells } = usePermissions();
+  const { can, coordinatesCells, churchWide, hasCellScope } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
   // El menú se arma con lo que el rol puede gestionar. Antes se mostraban las
   // 13 secciones a cualquiera y el backend respondía 403 al entrar.
   const menuItems = ADMIN_MODULES
-    .filter((mod) => (mod.requiresLedCell ? leadsCells : can(mod.permission)))
+    .filter((mod) => (mod.requiresCellScope ? hasCellScope : can(mod.permission)))
     .map((mod) => ({
-      name: mod.name,
+      // La etiqueta refleja el alcance: el líder gestiona la suya, el
+      // coordinador varias y el pastorado todas.
+      name: mod.requiresCellScope
+        ? churchWide
+          ? 'Células de la Iglesia'
+          : coordinatesCells
+            ? 'Mis Células'
+            : 'Mi Célula'
+        : mod.name,
       path: mod.path,
       icon: MODULE_ICONS[mod.path] ?? LayoutDashboard,
     }));

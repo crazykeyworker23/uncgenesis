@@ -158,7 +158,7 @@ class SettingsPage extends ConsumerWidget {
 
           Center(
             child: Text(
-              'Génesis App · Versión 1.0.0',
+              'Génesis App · Versión 1.1.0',
               style: AppTextStyles.bodySmall.copyWith(
                 color: AppColors.crema.withValues(alpha: 0.35),
               ),
