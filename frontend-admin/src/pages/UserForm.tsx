@@ -4,6 +4,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save, User, Shield, Phone, Mail, MapPin, Info } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { PasswordInput } from '../components/ui/PasswordInput';
 import { Role } from '../features/roles/types';
 
 export const UserForm: React.FC = () => {
@@ -277,9 +278,8 @@ export const UserForm: React.FC = () => {
               <label htmlFor="user-password" className="block text-xs font-semibold text-crema text-opacity-70 ml-1">
                 {isEdit ? 'Nueva Contraseña' : 'Contraseña Inicial *'}
               </label>
-              <input
+              <PasswordInput
                 id="user-password"
-                type="password"
                 autoComplete="new-password"
                 placeholder={isEdit ? 'Dejar en blanco para mantener la actual' : 'Mínimo 8 caracteres'}
                 className={`w-full px-4 py-2.5 bg-deep-teal bg-opacity-40 border rounded-xl text-white placeholder-crema placeholder-opacity-35 text-xs focus:outline-none transition-all ${

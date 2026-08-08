@@ -20,6 +20,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _obscureConfirm = true;
 
   @override
   void dispose() {
@@ -149,6 +150,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                       labelText: 'Contraseña',
                       prefixIcon: const Icon(Icons.lock_outlined, color: AppColors.dorado),
                       suffixIcon: IconButton(
+                        tooltip: _obscurePassword ? 'Mostrar contraseña' : 'Ocultar contraseña',
                         icon: Icon(
                           _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                           color: AppColors.crema.withValues(alpha: 0.5),
@@ -171,12 +173,22 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   // Confirm Password Field
                   TextFormField(
                     controller: _confirmPasswordController,
-                    obscureText: _obscurePassword,
+                    obscureText: _obscureConfirm,
                     enabled: !isLoading,
                     style: AppTextStyles.bodyMedium,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Confirmar contraseña',
-                      prefixIcon: Icon(Icons.lock_clock_outlined, color: AppColors.dorado),
+                      prefixIcon: const Icon(Icons.lock_clock_outlined, color: AppColors.dorado),
+                      // Interruptor propio: al comparar dos contraseñas conviene
+                      // poder revelar una sin descubrir la otra.
+                      suffixIcon: IconButton(
+                        tooltip: _obscureConfirm ? 'Mostrar contraseña' : 'Ocultar contraseña',
+                        icon: Icon(
+                          _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                          color: AppColors.crema.withValues(alpha: 0.5),
+                        ),
+                        onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                      ),
                     ),
                     validator: (value) {
                       if (value != _passwordController.text) {

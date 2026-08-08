@@ -226,6 +226,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           hintStyle: TextStyle(color: AppColors.crema.withValues(alpha: 0.4)),
                           prefixIcon: const Icon(Icons.lock_outline, color: AppColors.dorado),
                           suffixIcon: IconButton(
+                            tooltip: _obscurePassword ? 'Mostrar contraseña' : 'Ocultar contraseña',
                             icon: Icon(
                               _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                               color: AppColors.crema.withValues(alpha: 0.5),

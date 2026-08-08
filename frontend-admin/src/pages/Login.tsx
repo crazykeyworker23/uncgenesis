@@ -5,6 +5,7 @@ import { Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { apiClient } from '../api/client';
 import { Logo } from '../components/ui/Logo';
+import { PasswordInput } from '../components/ui/PasswordInput';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -139,9 +140,8 @@ export const Login: React.FC = () => {
                 <a href="#" className="text-[10px] text-dorado hover:underline">¿Olvidaste tu contraseña?</a>
               </div>
               <div className="relative">
-                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-crema text-opacity-35" />
-                <input
-                  type="password"
+                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-crema text-opacity-35 z-10" />
+                <PasswordInput
                   placeholder="••••••••"
                   className="w-full pl-11 glass-input text-xs"
                   {...register('password', { required: 'La contraseña es obligatoria' })}
