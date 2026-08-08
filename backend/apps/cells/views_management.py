@@ -85,14 +85,25 @@ class CellMeetingViewSet(ScopedCellResourceMixin, viewsets.ModelViewSet):
     ordering = ['-date']
 
     perm_map = {
-        'list': 'MEETINGS_VIEW',
-        'retrieve': 'MEETINGS_VIEW',
         'create': 'MEETINGS_CREATE',
         'update': 'MEETINGS_EDIT',
         'partial_update': 'MEETINGS_EDIT',
         'destroy': 'MEETINGS_DELETE',
         'attendance': 'ATTENDANCE_EDIT',
     }
+
+    def get_permissions(self):
+        """
+        Consultar reuniones se autoriza por alcance, no por permiso.
+
+        El queryset ya está recortado a las células que la persona alcanza, y
+        un miembro sólo alcanza la suya. Exigir además MEETINGS_VIEW lo dejaba
+        sin poder ver las reuniones de su propia célula, que sí le corresponde
+        consultar. Registrar y modificar siguen exigiendo permiso.
+        """
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
         cell_id = request.data.get('cell')

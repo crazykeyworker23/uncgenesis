@@ -456,7 +456,12 @@ class TestChurchWideIsNotCellWide:
         assert client.get(
             cell_url('members', church['cell_a'].id)
         ).status_code == status.HTTP_403_FORBIDDEN
-        assert client.get(MEETINGS_URL).status_code == status.HTTP_403_FORBIDDEN
+
+        # Consultar reuniones se autoriza por alcance: el editor no alcanza
+        # ninguna célula, así que el listado le sale vacío.
+        meetings = client.get(MEETINGS_URL)
+        assert meetings.status_code == status.HTTP_200_OK
+        assert meetings.data['results'] == []
 
     def test_support_does_not_reach_cells(self, church, make_user):
         support = make_user('consejeria@genesisapp.org', RoleType.SUPPORT)
@@ -526,12 +531,23 @@ class TestNotificationManagementScope:
 @pytest.mark.django_db
 class TestMemberScope:
     def test_member_cannot_use_management_endpoints(self, church):
+        """
+        Consulta la vida de su célula, pero no la administra.
+
+        El seguimiento pastoral son notas sobre la persona: las escribe y las
+        lee quien la acompaña, no ella misma.
+        """
         client = _client(church['member_a'])
 
-        assert client.get(MEETINGS_URL).status_code == status.HTTP_403_FORBIDDEN
         assert client.get(FOLLOWUPS_URL).status_code == status.HTTP_403_FORBIDDEN
         assert client.post(
             MEETINGS_URL, {'cell': church['cell_a'].id, 'date': '2026-08-09'}, format='json'
+        ).status_code == status.HTTP_403_FORBIDDEN
+        assert client.post(
+            REPORTS_URL,
+            {'cell': church['cell_a'].id, 'period_start': '2026-08-01',
+             'period_end': '2026-08-31', 'summary': 'x'},
+            format='json',
         ).status_code == status.HTTP_403_FORBIDDEN
 
     def test_member_cannot_register_people(self, church):
@@ -792,3 +808,62 @@ class TestCellReportPhoto:
 
         res = _client(church['outsider_leader']).get(f'{REPORTS_URL}{report_id}/')
         assert res.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+class TestMemberCanFollowItsOwnCell:
+    """
+    El miembro consulta la vida de su célula desde la app.
+
+    Su especificación le permite consultar reuniones y actividades; consultar
+    se autoriza por alcance, no por permiso del catálogo.
+    """
+
+    def test_member_sees_the_meetings_of_its_own_cell(self, church):
+        CellMeeting.objects.create(cell=church['cell_a'], date='2026-09-07', topic='Propia')
+        CellMeeting.objects.create(cell=church['cell_b'], date='2026-09-07', topic='Ajena')
+
+        res = _client(church['member_a']).get(MEETINGS_URL)
+        assert res.status_code == status.HTTP_200_OK
+
+        topics = [m['topic'] for m in res.data['results']]
+        assert topics == ['Propia'], 'sólo debe ver las de su célula'
+
+    def test_member_cannot_open_a_meeting_of_another_cell(self, church):
+        foreign = CellMeeting.objects.create(cell=church['cell_b'], date='2026-09-08')
+
+        res = _client(church['member_a']).get(f'{MEETINGS_URL}{foreign.id}/')
+        assert res.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_member_still_cannot_register_or_modify_meetings(self, church):
+        """Consultar sí; registrar y borrar siguen siendo del líder."""
+        client = _client(church['member_a'])
+        meeting = CellMeeting.objects.create(cell=church['cell_a'], date='2026-09-09')
+
+        assert client.post(
+            MEETINGS_URL, {'cell': church['cell_a'].id, 'date': '2026-09-10'}, format='json'
+        ).status_code == status.HTTP_403_FORBIDDEN
+        assert client.patch(
+            f'{MEETINGS_URL}{meeting.id}/', {'topic': 'Cambiado'}, format='json'
+        ).status_code == status.HTTP_403_FORBIDDEN
+        assert client.delete(
+            f'{MEETINGS_URL}{meeting.id}/'
+        ).status_code == status.HTTP_403_FORBIDDEN
+        assert client.post(
+            f'{MEETINGS_URL}{meeting.id}/attendance/',
+            {'attendances': [{'member_id': church['member_a'].id, 'status': 'PRESENT'}]},
+            format='json',
+        ).status_code == status.HTTP_403_FORBIDDEN
+
+    def test_a_person_without_cell_sees_nothing(self, church, make_user):
+        stray = make_user('sin.celula@genesisapp.org', RoleType.MEMBER)
+        CellMeeting.objects.create(cell=church['cell_a'], date='2026-09-11')
+
+        res = _client(stray).get(MEETINGS_URL)
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data['results'] == []
+
+    def test_member_still_has_no_admin_panel(self, church):
+        """Abrir las reuniones no le abre el panel."""
+        res = _client(church['member_a']).get(reverse('auth_me'))
+        assert res.data['can_access_admin'] is False
