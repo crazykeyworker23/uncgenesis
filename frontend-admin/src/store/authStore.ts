@@ -114,11 +114,18 @@ export function usePermissions() {
     coordinatesCells: (scope?.coordinates_cell_ids?.length ?? 0) > 0,
     /** Alcanza toda la iglesia. */
     churchWide: Boolean(scope?.church_wide),
-    /** Puede acceder a la sección de gestión de célula. */
+    /**
+     * Puede acceder a la sección de gestión de célula.
+     *
+     * Se exige responsabilidad real sobre grupos: liderarlos, coordinarlos o
+     * supervisarlos a nivel de iglesia. Abarcar la iglesia no basta —un editor
+     * de contenido o un consejero también la abarcan en lo suyo, y no tienen
+     * nada que hacer en la vida interna de las células.
+     */
     hasCellScope:
       (user?.leads_cells ?? 0) > 0 ||
       (scope?.coordinates_cell_ids?.length ?? 0) > 0 ||
-      Boolean(scope?.church_wide),
+      (Boolean(scope?.church_wide) && userHasPermission(user, 'CELLS_VIEW')),
     /**
      * Puede registrar datos en esa célula.
      *

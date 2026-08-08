@@ -45,7 +45,7 @@ export function ProtectedRoute({ permission, requiresCellScope }: ProtectedRoute
     const hasCellScope =
       (user.leads_cells ?? 0) > 0 ||
       (scope?.coordinates_cell_ids?.length ?? 0) > 0 ||
-      Boolean(scope?.church_wide);
+      (Boolean(scope?.church_wide) && userHasPermission(user, 'CELLS_VIEW'));
     if (!hasCellScope) return <NoAccess />;
   }
 

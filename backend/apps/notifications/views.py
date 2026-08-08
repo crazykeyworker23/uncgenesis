@@ -47,12 +47,27 @@ class NotificationViewSet(viewsets.ModelViewSet):
         if not user or not user.is_authenticated:
             return qs.none()
 
-        # Superadministrador en Panel Web (listado admin_view, borrado, edicion
-        # o envio manual). Se usa is_superadmin para que el rol SUPERADMIN
-        # asignado desde el panel tenga el mismo alcance que la marca de Django.
-        from apps.roles.utils import is_superadmin
+        # Gestion de comunicados en el Panel Web (listado admin_view, borrado,
+        # edicion o envio manual). Antes estaba limitada al superadministrador,
+        # asi que el pastor veia la seccion en el menu pero solo con su feed
+        # personal: no podia gestionar los comunicados que si le competen.
+        # Ahora la abre el permiso del catalogo, que el superadministrador
+        # tiene por definicion.
+        from apps.roles.utils import has_any_permission
 
-        if is_superadmin(user) and (self.request.query_params.get('admin_view') == 'true' or self.action in ['destroy', 'update', 'partial_update', 'send_now']):
+        is_management = (
+            self.request.query_params.get('admin_view') == 'true'
+            or self.action in ['destroy', 'update', 'partial_update', 'send_now']
+        )
+        # NOTIFICATIONS_VIEW no basta: lo tiene tambien el lider, para quien
+        # significa "recibir comunicados". Gestionar los de la iglesia exige un
+        # permiso de gestion.
+        manages_communications = has_any_permission(user, [
+            'NOTIFICATIONS_CREATE',
+            'NOTIFICATIONS_SEND',
+            'NOTIFICATIONS_DELETE',
+        ])
+        if is_management and manages_communications:
             return qs.all()
 
         # Para el feed de la App Movil:

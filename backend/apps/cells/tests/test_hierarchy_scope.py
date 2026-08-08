@@ -417,6 +417,94 @@ class TestPastorScope:
 
 
 @pytest.mark.django_db
+class TestChurchWideIsNotCellWide:
+    """
+    Abarcar la iglesia no da acceso a la vida interna de las células.
+
+    El editor de contenido y el consejero tienen alcance de iglesia en su
+    materia, pero no gestionan grupos: no deben leer miembros, reuniones ni
+    seguimientos de una célula que no les corresponde.
+    """
+
+    def test_content_editor_does_not_reach_cells(self, church, make_user):
+        editor = make_user('editor.contenido@genesisapp.org', RoleType.CONTENT_EDITOR)
+
+        assert get_accessible_cell_ids(editor) == set()
+        assert not can_reach_cell(editor, church['cell_a'].id)
+        assert not can_manage_cell(editor, church['cell_a'].id)
+
+        client = _client(editor)
+        assert client.get(
+            cell_url('members', church['cell_a'].id)
+        ).status_code == status.HTTP_403_FORBIDDEN
+        assert client.get(MEETINGS_URL).status_code == status.HTTP_403_FORBIDDEN
+
+    def test_support_does_not_reach_cells(self, church, make_user):
+        support = make_user('consejeria@genesisapp.org', RoleType.SUPPORT)
+
+        assert get_accessible_cell_ids(support) == set()
+        assert not can_reach_cell(support, church['cell_a'].id)
+
+        res = _client(support).get(MY_CELLS_URL)
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data['results'] == []
+
+    def test_pastor_still_reaches_every_cell(self, church):
+        """Quien sí supervisa grupos conserva el alcance completo."""
+        assert get_accessible_cell_ids(church['pastor']) is None
+        assert can_manage_cell(church['pastor'], church['cell_z'].id)
+
+
+@pytest.mark.django_db
+class TestNotificationManagementScope:
+    def test_pastor_manages_the_communications_list(self, church):
+        """
+        El pastor gestiona comunicados, no sólo recibe los suyos.
+
+        Antes el listado administrativo estaba limitado al superadministrador,
+        así que veía la sección con su feed personal y nada que gestionar.
+        """
+        from apps.notifications.models import (
+            Notification,
+            NotificationStatus,
+            TargetAudience,
+        )
+
+        Notification.objects.create(
+            title='Programada', body='x',
+            target_audience=TargetAudience.ALL,
+            status=NotificationStatus.PENDING,
+        )
+
+        res = _client(church['pastor']).get(
+            reverse('notifications-list'), {'admin_view': 'true'}
+        )
+        assert res.status_code == status.HTTP_200_OK
+        assert any(n['title'] == 'Programada' for n in res.data['results'])
+
+    def test_leader_only_receives_its_own_feed(self, church):
+        """Pedir admin_view sin el permiso no amplía nada."""
+        from apps.notifications.models import (
+            Notification,
+            NotificationStatus,
+            TargetAudience,
+        )
+
+        Notification.objects.create(
+            title='Interna del pastorado', body='x',
+            target_audience=TargetAudience.ALL,
+            status=NotificationStatus.PENDING,
+        )
+
+        res = _client(church['leader_a']).get(
+            reverse('notifications-list'), {'admin_view': 'true'}
+        )
+        assert res.status_code == status.HTTP_200_OK
+        # Sólo las enviadas y dirigidas a él: nunca las pendientes de gestión.
+        assert all(n['title'] != 'Interna del pastorado' for n in res.data['results'])
+
+
+@pytest.mark.django_db
 class TestMemberScope:
     def test_member_cannot_use_management_endpoints(self, church):
         client = _client(church['member_a'])

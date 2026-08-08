@@ -49,10 +49,39 @@ def get_user_scope(user):
     return max(scopes, key=lambda s: SCOPE_RANK[s])
 
 
+# Tener alcance de iglesia no significa por sí solo poder ver la vida interna
+# de todas las células. Un editor de contenido o un consejero abarcan la
+# iglesia en lo suyo, pero no tienen nada que hacer en los miembros, las
+# asistencias o los seguimientos de un grupo. Hace falta además un permiso de
+# célula.
+#
+# CELLS_VIEW no sirve como señal: lo tiene también el editor de contenido, y
+# sólo significa poder consultar el catálogo de células, que además es público.
+# Lo que distingue a quien supervisa grupos es acceder a su vida interna.
+CELL_RESPONSIBILITY_PERMISSIONS = [
+    'MEETINGS_VIEW',
+    'ATTENDANCE_VIEW',
+    'FOLLOWUPS_VIEW',
+]
+
+
 def has_church_wide_scope(user):
     """`True` para pastor y superadministrador: ven la iglesia completa."""
     scope = get_user_scope(user)
     return scope in (AccessScope.CHURCH, AccessScope.PLATFORM)
+
+
+def _reaches_every_cell(user):
+    """`True` si el usuario supervisa las células de toda la iglesia."""
+    from apps.roles.utils import has_any_permission, is_superadmin
+
+    if is_superadmin(user):
+        return True
+
+    if get_user_scope(user) not in (AccessScope.CHURCH, AccessScope.PLATFORM):
+        return False
+
+    return has_any_permission(user, CELL_RESPONSIBILITY_PERMISSIONS)
 
 
 def get_accessible_cell_ids(user):
@@ -68,7 +97,10 @@ def get_accessible_cell_ids(user):
     if scope is None:
         return set()
 
-    if scope in (AccessScope.CHURCH, AccessScope.PLATFORM):
+    # Sólo quien supervisa células a nivel de iglesia queda sin filtro. Un
+    # editor de contenido o un consejero abarcan la iglesia en su materia, pero
+    # no en la vida interna de los grupos.
+    if _reaches_every_cell(user):
         return None
 
     ids = set()
@@ -124,9 +156,10 @@ def can_manage_cell(user, cell_id):
     if cell_id is None:
         return False
 
-    scope = get_user_scope(user)
-    if scope in (AccessScope.CHURCH, AccessScope.PLATFORM):
+    if _reaches_every_cell(user):
         return True
+
+    scope = get_user_scope(user)
 
     if scope == AccessScope.ASSIGNED_CELLS:
         return (
