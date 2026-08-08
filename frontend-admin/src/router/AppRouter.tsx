@@ -83,7 +83,7 @@ export default function AppRouter() {
           </Route>
 
           {/* Cells Routes */}
-          <Route element={<ProtectedRoute permission="CELLS_VIEW" />}>
+          <Route element={<ProtectedRoute permission="CELLS_CREATE" />}>
             <Route path="/celulas" element={<CellList />} />
           </Route>
           <Route element={<ProtectedRoute permission={['CELLS_CREATE', 'CELLS_EDIT']} />}>

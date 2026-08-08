@@ -337,6 +337,41 @@ class TestCoordinatorScope:
             reverse('publication-list'), {'title': 'x', 'content': 'y'}, format='json'
         ).status_code == status.HTTP_403_FORBIDDEN
 
+    def test_coordinator_cannot_broadcast_to_the_whole_church(self, church):
+        """
+        Su función es comunicar a sus líderes, no difundir a toda la iglesia.
+
+        El comunicado a su célula va por /cells/<id>/send-reminder/, que se
+        autoriza por asignación y no necesita el permiso global.
+        """
+        res = _client(church['coordinator']).post(
+            reverse('notifications-list'),
+            {'title': 'A todos', 'body': 'x', 'target_audience': 'ALL'},
+            format='json',
+        )
+        assert res.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_coordinator_cannot_read_church_wide_reports(self, church):
+        """Los indicadores que le tocan son los de sus células."""
+        client = _client(church['coordinator'])
+        assert client.get(reverse('reports-summary')).status_code == status.HTTP_403_FORBIDDEN
+        assert client.get(reverse('reports-dashboard')).status_code == status.HTTP_403_FORBIDDEN
+
+        # Los de su célula sí, por alcance.
+        assert client.get(
+            cell_url('statistics', church['cell_a'].id)
+        ).status_code == status.HTTP_200_OK
+
+    def test_coordinator_does_not_administer_cells_of_the_church(self, church):
+        """Supervisa las asignadas; crear o eliminar células es del pastorado."""
+        client = _client(church['coordinator'])
+        assert client.post(
+            reverse('cells-list'), {'name': 'Nueva'}, format='json'
+        ).status_code == status.HTTP_403_FORBIDDEN
+        assert client.delete(
+            reverse('cells-detail', args=[church['cell_a'].id])
+        ).status_code == status.HTTP_403_FORBIDDEN
+
     def test_coordinator_can_notify_its_leaders(self, church):
         member = church['member_a']
         assert member.assigned_cell_id == church['cell_a'].id

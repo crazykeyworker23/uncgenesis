@@ -44,9 +44,12 @@ export const ADMIN_MODULES: AdminModule[] = [
     writePermission: ['DEVOTIONALS_CREATE', 'DEVOTIONALS_EDIT'],
   },
   {
+    // Administración de las células de toda la iglesia: crear, reasignar
+    // líderes y coordinadores, dar de baja. Quien sólo gestiona las suyas usa
+    // la sección "Mi Célula", acotada a su alcance.
     name: 'Células',
     path: '/celulas',
-    permission: 'CELLS_VIEW',
+    permission: 'CELLS_CREATE',
     writePermission: ['CELLS_CREATE', 'CELLS_EDIT'],
   },
   {
