@@ -1,6 +1,7 @@
 """Serializers de la gestión interna de células: reuniones, asistencia y seguimiento."""
 
 from django.contrib.auth import get_user_model
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import (
@@ -158,6 +159,7 @@ class CellReportSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     submitted_by = PersonBriefSerializer(read_only=True)
     reviewed_by = PersonBriefSerializer(read_only=True)
+    photo_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = CellReport
@@ -165,6 +167,7 @@ class CellReportSerializer(serializers.ModelSerializer):
             'id', 'cell', 'cell_name',
             'period_start', 'period_end',
             'summary', 'highlights', 'challenges', 'prayer_needs',
+            'photo', 'photo_url', 'photo_caption',
             'meetings_held', 'average_attendance', 'new_members',
             'status', 'status_display',
             'submitted_by', 'sent_at',
@@ -172,12 +175,25 @@ class CellReportSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = [
-            'id', 'cell_name', 'status', 'status_display',
+            'id', 'cell_name', 'status', 'status_display', 'photo_url',
             'meetings_held', 'average_attendance', 'new_members',
             'submitted_by', 'sent_at',
             'reviewed_by', 'reviewed_at', 'review_notes',
             'created_at', 'updated_at',
         ]
+        extra_kwargs = {
+            # La imagen se devuelve resuelta en photo_url; este campo es sólo
+            # para subirla.
+            'photo': {'write_only': True, 'required': False, 'allow_null': True},
+        }
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_photo_url(self, obj):
+        """Dirección completa de la foto, para que el panel pueda mostrarla."""
+        if not obj.photo:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(obj.photo.url) if request else obj.photo.url
 
     def validate(self, attrs):
         start = attrs.get('period_start') or getattr(self.instance, 'period_start', None)

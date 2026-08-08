@@ -18,6 +18,8 @@ import {
   UserMinus,
   TrendingUp,
   FileText,
+  Image as ImageIcon,
+  X,
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { usePermissions } from '../store/authStore';
@@ -768,6 +770,9 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
   const [showForm, setShowForm] = useState(false);
   const [answering, setAnswering] = useState<number | null>(null);
   const [answer, setAnswer] = useState('');
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<string | null>(null);
   const [form, setForm] = useState({
     period_start: '',
     period_end: '',
@@ -775,18 +780,43 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
     highlights: '',
     challenges: '',
     prayer_needs: '',
+    photo_caption: '',
   });
+
+  const EMPTY = {
+    period_start: '', period_end: '', summary: '',
+    highlights: '', challenges: '', prayer_needs: '', photo_caption: '',
+  };
 
   const { data: reports } = useQuery<{ results: CellReport[] }>({
     queryKey: ['cell-reports', cellId],
     queryFn: async () => (await apiClient.get('/cell-reports/', { params: { cell: cellId } })).data,
   });
 
+  const pickPhoto = (file: File | null) => {
+    setPhoto(file);
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoPreview(file ? URL.createObjectURL(file) : null);
+  };
+
   const create = useMutation({
-    mutationFn: async () => apiClient.post('/cell-reports/', { cell: cellId, ...form }),
+    mutationFn: async () => {
+      // Con imagen la petición va como formulario; sin ella, como JSON.
+      if (!photo) {
+        return apiClient.post('/cell-reports/', { cell: cellId, ...form });
+      }
+      const data = new FormData();
+      data.append('cell', String(cellId));
+      Object.entries(form).forEach(([key, value]) => data.append(key, value));
+      data.append('photo', photo);
+      return apiClient.post('/cell-reports/', data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
     onSuccess: () => {
       onDone('Informe guardado como borrador. Revísalo y envíalo cuando esté listo.');
-      setForm({ period_start: '', period_end: '', summary: '', highlights: '', challenges: '', prayer_needs: '' });
+      setForm(EMPTY);
+      pickPhoto(null);
       setShowForm(false);
     },
     onError,
@@ -834,6 +864,52 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
           <Field label="Lo más destacado" value={form.highlights} onChange={(v) => setForm({ ...form, highlights: v })} multiline />
           <Field label="Dificultades" value={form.challenges} onChange={(v) => setForm({ ...form, challenges: v })} multiline />
           <Field label="Motivos de oración" value={form.prayer_needs} onChange={(v) => setForm({ ...form, prayer_needs: v })} multiline />
+
+          {/* Foto de la actividad: al coordinador le dice más que el texto */}
+          <div className="space-y-2">
+            <label className="block text-[10px] font-semibold text-crema text-opacity-65 ml-1">
+              Foto de la actividad (opcional)
+            </label>
+
+            {photoPreview ? (
+              <div className="relative inline-block">
+                <img
+                  src={photoPreview}
+                  alt="Vista previa"
+                  className="max-h-48 rounded-xl border border-white border-opacity-10"
+                />
+                <button
+                  onClick={() => pickPhoto(null)}
+                  title="Quitar la foto"
+                  className="absolute -top-2 -right-2 p-1.5 rounded-full bg-error-red text-white shadow-lg"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center gap-2 px-4 py-6 border border-dashed border-white border-opacity-15 rounded-xl cursor-pointer hover:border-dorado hover:border-opacity-50 transition-all">
+                <ImageIcon size={22} className="text-crema text-opacity-35" />
+                <span className="text-[11px] text-crema text-opacity-50">
+                  Toca para elegir una imagen de la reunión
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => pickPhoto(e.target.files?.[0] ?? null)}
+                />
+              </label>
+            )}
+
+            {photo && (
+              <Field
+                label="Pie de foto"
+                value={form.photo_caption}
+                onChange={(v) => setForm({ ...form, photo_caption: v })}
+              />
+            )}
+          </div>
+
           <p className="text-[10px] text-crema text-opacity-40">
             Las cifras del periodo (reuniones, asistencia media e integrantes nuevos) se calculan
             solas al enviar el informe.
@@ -895,6 +971,29 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
                 <Block title="Motivos de oración" text={report.prayer_needs} />
               </div>
 
+              {/* La foto de la actividad, tal como la ve quien revisa */}
+              {report.photo_url && (
+                <div className="space-y-1.5">
+                  <button
+                    onClick={() => setZoom(report.photo_url)}
+                    className="block w-full rounded-xl overflow-hidden border border-white border-opacity-10 hover:border-dorado hover:border-opacity-40 transition-all"
+                    title="Ampliar"
+                  >
+                    <img
+                      src={report.photo_url}
+                      alt={report.photo_caption || 'Foto de la actividad'}
+                      className="w-full max-h-72 object-cover"
+                      loading="lazy"
+                    />
+                  </button>
+                  {report.photo_caption && (
+                    <p className="text-[10px] text-crema text-opacity-45 italic text-center">
+                      {report.photo_caption}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {report.review_notes && (
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                   <p className="text-[10px] font-bold text-emerald-400 mb-1">
@@ -946,6 +1045,29 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Visor ampliado: las fotos de una reunión suelen tener detalle que se
+          pierde en miniatura. */}
+      {zoom && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-80 p-6"
+          onClick={() => setZoom(null)}
+        >
+          <button
+            onClick={() => setZoom(null)}
+            className="absolute top-5 right-5 p-2 rounded-full bg-white bg-opacity-10 text-white hover:bg-opacity-20"
+            title="Cerrar"
+          >
+            <X size={18} />
+          </button>
+          <img
+            src={zoom}
+            alt="Foto de la actividad"
+            className="max-h-full max-w-full rounded-xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>

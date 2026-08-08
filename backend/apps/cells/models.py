@@ -198,6 +198,11 @@ class CellReport(models.Model):
     challenges = models.TextField(blank=True, verbose_name='dificultades')
     prayer_needs = models.TextField(blank=True, verbose_name='motivos de oración')
 
+    # Una foto de la actividad: al coordinador le dice más de la reunión que
+    # cualquier resumen escrito.
+    photo = models.ImageField(upload_to='cell_reports/', blank=True, null=True)
+    photo_caption = models.CharField(max_length=255, blank=True, verbose_name='pie de foto')
+
     # Cifras del periodo, congeladas al enviar el informe.
     meetings_held = models.PositiveIntegerField(default=0)
     average_attendance = models.FloatField(default=0)

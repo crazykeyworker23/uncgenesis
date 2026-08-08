@@ -714,3 +714,81 @@ class TestCellReports:
         )
         assert res.status_code == status.HTTP_400_BAD_REQUEST
         assert 'period_end' in res.data
+
+
+@pytest.mark.django_db
+class TestCellReportPhoto:
+    """La foto de la actividad acompaña al informe hasta quien lo revisa."""
+
+    @staticmethod
+    def _image():
+        """Un PNG mínimo válido, suficiente para ejercitar la subida."""
+        import io
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+
+        buffer = io.BytesIO()
+        Image.new('RGB', (8, 8), color=(212, 175, 55)).save(buffer, format='PNG')
+        buffer.seek(0)
+        return SimpleUploadedFile('reunion.png', buffer.read(), content_type='image/png')
+
+    def test_leader_attaches_a_photo_and_the_reviewer_sees_it(self, church):
+        created = _client(church['leader_a']).post(
+            REPORTS_URL,
+            {
+                'cell': church['cell_a'].id,
+                'period_start': '2026-09-01',
+                'period_end': '2026-09-30',
+                'summary': 'Buen mes.',
+                'photo': self._image(),
+                'photo_caption': 'La reunión del jueves',
+            },
+            format='multipart',
+        )
+        assert created.status_code == status.HTTP_201_CREATED
+        assert created.data['photo_url'], 'el informe debe devolver la dirección de la foto'
+        assert created.data['photo_caption'] == 'La reunión del jueves'
+
+        report_id = created.data['id']
+        _client(church['leader_a']).post(f'{REPORTS_URL}{report_id}/send/')
+
+        # Quien revisa recibe la imagen junto al texto
+        seen = _client(church['coordinator']).get(f'{REPORTS_URL}{report_id}/')
+        assert seen.status_code == status.HTTP_200_OK
+        assert seen.data['photo_url']
+        assert seen.data['photo_url'].startswith('http')
+        assert seen.data['photo_caption'] == 'La reunión del jueves'
+
+    def test_report_without_photo_is_still_valid(self, church):
+        """La imagen es opcional: un informe sólo de texto sigue sirviendo."""
+        created = _client(church['leader_a']).post(
+            REPORTS_URL,
+            {
+                'cell': church['cell_a'].id,
+                'period_start': '2026-10-01',
+                'period_end': '2026-10-31',
+                'summary': 'Sin fotos este mes.',
+            },
+            format='json',
+        )
+        assert created.status_code == status.HTTP_201_CREATED
+        assert created.data['photo_url'] is None
+
+    def test_a_foreign_leader_cannot_see_the_photo(self, church):
+        created = _client(church['leader_a']).post(
+            REPORTS_URL,
+            {
+                'cell': church['cell_a'].id,
+                'period_start': '2026-11-01',
+                'period_end': '2026-11-30',
+                'summary': 'Con foto.',
+                'photo': self._image(),
+            },
+            format='multipart',
+        )
+        report_id = created.data['id']
+        _client(church['leader_a']).post(f'{REPORTS_URL}{report_id}/send/')
+
+        res = _client(church['outsider_leader']).get(f'{REPORTS_URL}{report_id}/')
+        assert res.status_code == status.HTTP_404_NOT_FOUND

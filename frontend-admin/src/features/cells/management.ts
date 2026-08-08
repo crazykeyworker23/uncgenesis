@@ -142,6 +142,9 @@ export interface CellReport {
   highlights: string;
   challenges: string;
   prayer_needs: string;
+  /** Dirección de la foto de la actividad, si la hay. */
+  photo_url: string | null;
+  photo_caption: string;
   meetings_held: number;
   average_attendance: number;
   new_members: number;
