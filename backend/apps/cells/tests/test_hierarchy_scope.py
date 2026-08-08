@@ -252,6 +252,25 @@ class TestLeaderDailyWork:
         assert res.data['rejected'] == [church['member_z'].id]
         assert not Attendance.objects.filter(member=church['member_z']).exists()
 
+    def test_duplicate_meeting_is_rejected_with_a_clear_message(self, church):
+        """
+        Dos reuniones de la misma célula el mismo día.
+
+        La restricción de la base de datos ya lo impedía, pero salía como error
+        500: el líder veía un fallo del servidor en vez de saber qué corregir.
+        """
+        cell = church['cell_a']
+        CellMeeting.objects.create(cell=cell, date='2026-08-12', topic='Primera')
+
+        res = _client(church['leader_a']).post(
+            MEETINGS_URL,
+            {'cell': cell.id, 'date': '2026-08-12', 'topic': 'Duplicada'},
+            format='json',
+        )
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'date' in res.data
+        assert CellMeeting.objects.filter(cell=cell, date='2026-08-12').count() == 1
+
     def test_leader_registers_follow_up(self, church):
         res = _client(church['leader_a']).post(
             FOLLOWUPS_URL,

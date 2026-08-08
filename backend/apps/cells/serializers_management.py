@@ -57,6 +57,28 @@ class CellMeetingSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'cell_name', 'attendees_count', 'registered_by', 'created_at']
 
+    def validate(self, attrs):
+        """
+        Una célula no puede tener dos reuniones el mismo día.
+
+        La base de datos ya lo impide, pero sin esta comprobación el conflicto
+        salía como error 500 en lugar de un mensaje que el líder pueda
+        entender y corregir.
+        """
+        cell = attrs.get('cell') or getattr(self.instance, 'cell', None)
+        date = attrs.get('date') or getattr(self.instance, 'date', None)
+
+        if cell and date:
+            duplicates = CellMeeting.objects.filter(cell=cell, date=date)
+            if self.instance is not None:
+                duplicates = duplicates.exclude(pk=self.instance.pk)
+            if duplicates.exists():
+                raise serializers.ValidationError({
+                    'date': 'Ya existe una reunión registrada para esta célula en esa fecha.'
+                })
+
+        return attrs
+
 
 class AttendanceBulkItemSerializer(serializers.Serializer):
     member_id = serializers.IntegerField()
