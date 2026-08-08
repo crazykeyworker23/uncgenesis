@@ -52,6 +52,27 @@ class CustomUserAdminSerializer(serializers.ModelSerializer):
         """Permisos efectivos, para que el panel sepa qué mostrarle."""
         return sorted(get_user_permissions(obj))
 
+    def validate_email(self, value):
+        """
+        El correo es la identidad de acceso: se normaliza y se comprueba sin
+        distinguir mayúsculas.
+
+        Sin esto se podía guardar `Maria@Iglesia.org` y dejar a esa persona sin
+        poder entrar escribiendo `maria@iglesia.org`, o crear dos cuentas que
+        sólo se diferencian por las mayúsculas.
+        """
+        normalized = (value or '').strip().lower()
+        if not normalized:
+            return normalized
+
+        clash = User.objects.filter(email__iexact=normalized)
+        if self.instance is not None:
+            clash = clash.exclude(pk=self.instance.pk)
+        if clash.exists():
+            raise serializers.ValidationError('Ya existe una cuenta con ese correo.')
+
+        return normalized
+
     def validate_password(self, value):
         if not value:
             return value

@@ -12,7 +12,10 @@ class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
             raise ValueError('El correo electrónico es obligatorio')
-        email = self.normalize_email(email)
+        # normalize_email sólo pasa a minúsculas el dominio. Como el correo es
+        # la identidad de acceso, se normaliza completo para que quien escriba
+        # su correo con otras mayúsculas pueda entrar igualmente.
+        email = self.normalize_email(email).strip().lower()
         extra_fields.setdefault('is_active', True)
         extra_fields.setdefault('status', UserStatus.ACTIVE)
         user = self.model(email=email, **extra_fields)

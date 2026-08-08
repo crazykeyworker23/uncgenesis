@@ -206,12 +206,25 @@ export const UserForm: React.FC = () => {
               <input
                 id="user-email"
                 type="email"
-                disabled={isEdit}
-                className={`w-full px-4 py-2.5 bg-deep-teal bg-opacity-40 border rounded-xl text-white placeholder-crema placeholder-opacity-35 text-xs focus:outline-none transition-all disabled:opacity-40 ${
+                autoComplete="off"
+                className={`w-full px-4 py-2.5 bg-deep-teal bg-opacity-40 border rounded-xl text-white placeholder-crema placeholder-opacity-35 text-xs focus:outline-none transition-all ${
                   errors.email ? 'border-red-500' : 'border-white border-opacity-10 focus:border-dorado'
                 }`}
                 {...register('email', { required: 'El correo es obligatorio' })}
               />
+              {isEdit && (
+                // El correo es la identidad de acceso: conviene decirlo antes
+                // de que alguien lo cambie sin avisar a la persona.
+                <p className="text-[10px] text-crema text-opacity-45 ml-1 leading-relaxed">
+                  Es el correo con el que esta persona inicia sesión. Si lo cambias,
+                  deberá usar el nuevo para entrar (su contraseña no se ve afectada).
+                </p>
+              )}
+              {errors.email && (
+                <span className="text-[10px] text-red-400 font-medium ml-1">
+                  {String(errors.email.message)}
+                </span>
+              )}
             </div>
 
             {/* Phone */}

@@ -129,6 +129,82 @@ class TestUserAdministration:
         assert res.status_code == status.HTTP_400_BAD_REQUEST
         assert 'password' in res.data
 
+    def test_admin_can_change_the_login_email(self, admin_client, create_user):
+        """El correo es la identidad de acceso y debe poder corregirse."""
+        target = create_user(email="antiguo@genesisapp.org")
+
+        res = admin_client.patch(
+            user_detail(target.id), {'email': 'nuevo@genesisapp.org'}, format='json'
+        )
+        assert res.status_code == status.HTTP_200_OK
+
+        target.refresh_from_db()
+        assert target.email == 'nuevo@genesisapp.org'
+
+    def test_email_is_normalised_to_lowercase(self, admin_client, create_user):
+        """
+        Guardarlo tal cual dejaría fuera a quien escriba su correo en
+        minúsculas, porque el inicio de sesión compara el texto exacto.
+        """
+        target = create_user(email="normal@genesisapp.org")
+
+        res = admin_client.patch(
+            user_detail(target.id), {'email': '  Maria@Iglesia.ORG '}, format='json'
+        )
+        assert res.status_code == status.HTTP_200_OK
+
+        target.refresh_from_db()
+        assert target.email == 'maria@iglesia.org'
+
+    def test_email_already_taken_is_rejected(self, admin_client, create_user):
+        create_user(email="ocupado@genesisapp.org")
+        target = create_user(email="libre@genesisapp.org")
+
+        res = admin_client.patch(
+            user_detail(target.id), {'email': 'ocupado@genesisapp.org'}, format='json'
+        )
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'email' in res.data
+
+        target.refresh_from_db()
+        assert target.email == 'libre@genesisapp.org'
+
+    def test_email_clash_ignoring_case_is_rejected(self, admin_client, create_user):
+        """Dos cuentas no pueden diferenciarse sólo por las mayúsculas."""
+        create_user(email="pastor@genesisapp.org")
+        target = create_user(email="otro@genesisapp.org")
+
+        res = admin_client.patch(
+            user_detail(target.id), {'email': 'PASTOR@genesisapp.org'}, format='json'
+        )
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_keeping_its_own_email_is_not_a_clash(self, admin_client, create_user):
+        """Guardar sin tocar el correo no debe chocar consigo mismo."""
+        target = create_user(email="mismo@genesisapp.org")
+
+        res = admin_client.patch(
+            user_detail(target.id),
+            {'email': 'mismo@genesisapp.org', 'first_name': 'Actualizado'},
+            format='json',
+        )
+        assert res.status_code == status.HTTP_200_OK
+
+        target.refresh_from_db()
+        assert target.first_name == 'Actualizado'
+
+    def test_changing_the_email_keeps_the_password(self, admin_client, create_user):
+        target = create_user(email="conserva@genesisapp.org")
+        target.set_password('Clave.Solida.2026')
+        target.save()
+
+        admin_client.patch(
+            user_detail(target.id), {'email': 'conserva.nuevo@genesisapp.org'}, format='json'
+        )
+
+        target.refresh_from_db()
+        assert target.check_password('Clave.Solida.2026')
+
     def test_admin_can_reset_user_password(self, admin_client, create_user):
         """El administrador actualiza credenciales sin conocer la anterior."""
         target = create_user(email="olvidadizo@genesisapp.org")
