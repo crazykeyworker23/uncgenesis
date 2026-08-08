@@ -849,8 +849,16 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
       )}
 
       {!reports?.results?.length ? (
-        <div className="glass-panel p-8 text-center text-xs text-crema text-opacity-45">
-          Todavía no hay informes de esta célula.
+        <div className="glass-panel p-10 text-center">
+          <FileText size={32} className="text-dorado mx-auto mb-3 opacity-60" />
+          <p className="text-sm font-bold text-crema mb-1.5">Todavía no hay informes</p>
+          <p className="text-xs text-crema text-opacity-50 max-w-md mx-auto leading-relaxed">
+            {canWrite
+              ? 'Usa "Nuevo informe" para contar cómo le fue a tu célula en el periodo. Se guarda como borrador y lo envías cuando esté listo; las cifras de reuniones y asistencia se calculan solas.'
+              : canReview
+                ? 'Cuando el líder envíe su informe del periodo, aparecerá aquí para que lo leas y respondas.'
+                : 'Tu rol no redacta ni revisa informes de esta célula.'}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
