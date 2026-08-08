@@ -30,162 +30,188 @@ class ApiClient {
     _resolvedBaseUrl = 'http://72.61.48.152:8080/api/v1';
   }
 
+  /// Dirección propia de esta instancia. Sin valor se usa la del servidor
+  /// configurado para la app; sirve para apuntar a otro entorno sin tocar la
+  /// configuración global.
+  final String? _baseUrlOverride;
+
+  String get _effectiveBaseUrl => _baseUrlOverride ?? baseUrl;
+
   ApiClient({
     required this.dio,
     required FlutterSecureStorage storage,
-  }) : _storage = storage {
-    dio.options.baseUrl = baseUrl;
+    String? baseUrlOverride,
+  })  : _storage = storage,
+        _baseUrlOverride = baseUrlOverride {
+    dio.options.baseUrl = _effectiveBaseUrl;
     dio.options.connectTimeout = const Duration(seconds: 10);
     dio.options.receiveTimeout = const Duration(seconds: 10);
-    
+
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          options.baseUrl = baseUrl;
+          options.baseUrl = _effectiveBaseUrl;
           final accessToken = await _storage.read(key: 'access_token');
           if (accessToken != null) {
             options.headers['Authorization'] = 'Bearer $accessToken';
           }
           return handler.next(options);
         },
+        // El handler se invoca exactamente una vez, al final y fuera de
+        // cualquier try/catch. Antes `handler.resolve()` estaba dentro de un
+        // try cuyo catch volvía a llamar al handler: si la resolución
+        // propagaba cualquier excepción, el interceptor lo llamaba dos veces y
+        // Dio lanzaba "The `handler` has already been called".
         onError: (DioException error, handler) async {
-          final retries = (error.requestOptions.extra['retry_count'] as int?) ?? 0;
-          if (retries < 2 &&
-              (error.type == DioExceptionType.connectionTimeout ||
-               error.type == DioExceptionType.connectionError ||
-               error.type == DioExceptionType.receiveTimeout ||
-               error.type == DioExceptionType.unknown)) {
-            error.requestOptions.extra['retry_count'] = retries + 1;
-            await determineBaseUrl();
-            await Future.delayed(Duration(milliseconds: 250 * (retries + 1)));
-            try {
-              final retryDio = Dio(BaseOptions(
-                baseUrl: baseUrl,
-                connectTimeout: const Duration(seconds: 10),
-                receiveTimeout: const Duration(seconds: 10),
-              ));
-              final accessToken = await _storage.read(key: 'access_token');
-              final headers = Map<String, dynamic>.from(error.requestOptions.headers);
-              if (accessToken != null) {
-                headers['Authorization'] = 'Bearer $accessToken';
-              }
-              final response = await retryDio.request(
-                error.requestOptions.path,
-                data: error.requestOptions.data,
-                queryParameters: error.requestOptions.queryParameters,
-                options: Options(
-                  method: error.requestOptions.method,
-                  headers: headers,
-                  responseType: error.requestOptions.responseType,
-                  contentType: error.requestOptions.contentType,
-                  extra: error.requestOptions.extra,
-                ),
-              );
-              return handler.resolve(response);
-            } catch (retryError) {
-              if (retryError is DioException) {
-                return handler.next(retryError);
-              }
-              return handler.next(error);
-            }
+          Response<dynamic>? recovered;
+          DioException failure = error;
+
+          try {
+            recovered = await _tryRecover(error);
+          } on DioException catch (e) {
+            failure = e;
+          } catch (_) {
+            // Cualquier otro fallo durante la recuperación deja el error
+            // original, que es el que le interesa a quien hizo la petición.
           }
 
-          if (error.response?.statusCode == 401) {
-            final requestOptions = error.requestOptions;
-
-            if (requestOptions.path.contains('/auth/token/refresh/')) {
-              await _logout();
-              return handler.next(error);
-            }
-
-            try {
-              final newAccessToken = await _performTokenRefresh();
-              if (newAccessToken != null) {
-                final refreshDio = Dio(BaseOptions(
-                  baseUrl: baseUrl,
-                  connectTimeout: const Duration(seconds: 10),
-                  receiveTimeout: const Duration(seconds: 10),
-                ));
-                final opts = Options(
-                  method: requestOptions.method,
-                  headers: Map<String, dynamic>.from(requestOptions.headers)
-                    ..['Authorization'] = 'Bearer $newAccessToken',
-                  responseType: requestOptions.responseType,
-                  contentType: requestOptions.contentType,
-                  extra: requestOptions.extra,
-                );
-                final response = await refreshDio.request(
-                  requestOptions.path,
-                  data: requestOptions.data,
-                  queryParameters: requestOptions.queryParameters,
-                  options: opts,
-                );
-                return handler.resolve(response);
-              } else {
-                await _logout();
-                return handler.next(error);
-              }
-            } catch (e) {
-              await _logout();
-              if (e is DioException) {
-                return handler.next(e);
-              }
-              return handler.next(error);
-            }
+          if (recovered != null) {
+            handler.resolve(recovered);
+          } else {
+            handler.next(failure);
           }
-
-          return handler.next(error);
         },
       ),
     );
   }
 
-  Future<String?> _performTokenRefresh() async {
-    if (_isRefreshing) {
-      return _refreshCompleter?.future;
+  /// Intenta rescatar una petición fallida.
+  ///
+  /// Devuelve la respuesta si lo consigue y `null` si el error debe llegar a
+  /// quien hizo la llamada. Nunca toca el handler del interceptor: esa decisión
+  /// es de `onError`, que así lo invoca una sola vez.
+  Future<Response<dynamic>?> _tryRecover(DioException error) async {
+    final options = error.requestOptions;
+    final retries = (options.extra['retry_count'] as int?) ?? 0;
+
+    final isTransient = error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.connectionError ||
+        error.type == DioExceptionType.receiveTimeout ||
+        error.type == DioExceptionType.unknown;
+
+    // 1. Fallo pasajero de red: se reintenta con una espera creciente.
+    if (retries < 2 && isTransient) {
+      options.extra['retry_count'] = retries + 1;
+      if (_baseUrlOverride == null) {
+        await determineBaseUrl();
+      }
+      await Future.delayed(Duration(milliseconds: 250 * (retries + 1)));
+      return _replay(options);
     }
 
+    // 2. Sesión caducada: se renueva el token y se repite la petición.
+    if (error.response?.statusCode == 401) {
+      if (options.path.contains('/auth/token/refresh/')) {
+        // Si es el propio refresco el que falla, no hay nada que renovar.
+        await _logout();
+        return null;
+      }
+
+      final newAccessToken = await _performTokenRefresh();
+      if (newAccessToken == null) {
+        await _logout();
+        return null;
+      }
+      return _replay(options, accessToken: newAccessToken);
+    }
+
+    return null;
+  }
+
+  /// Repite una petición con un cliente sin interceptores, para no reentrar en
+  /// esta misma lógica y provocar una cadena de reintentos.
+  Future<Response<dynamic>> _replay(RequestOptions options, {String? accessToken}) async {
+    final client = Dio(BaseOptions(
+      baseUrl: _effectiveBaseUrl,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 10),
+    ));
+
+    final headers = Map<String, dynamic>.from(options.headers);
+    final token = accessToken ?? await _storage.read(key: 'access_token');
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+
+    return client.request(
+      options.path,
+      data: options.data,
+      queryParameters: options.queryParameters,
+      options: Options(
+        method: options.method,
+        headers: headers,
+        responseType: options.responseType,
+        contentType: options.contentType,
+        extra: options.extra,
+      ),
+    );
+  }
+
+  /// Renueva el token de acceso.
+  ///
+  /// Devuelve `null` cuando no se puede renovar. Las peticiones que fallen a la
+  /// vez comparten el mismo refresco en lugar de lanzar uno cada una.
+  Future<String?> _performTokenRefresh() async {
+    final inFlight = _refreshCompleter;
+    if (_isRefreshing && inFlight != null) {
+      return inFlight.future;
+    }
+
+    final completer = Completer<String?>();
     _isRefreshing = true;
-    _refreshCompleter = Completer<String?>();
+    _refreshCompleter = completer;
+
+    String? newAccessToken;
 
     try {
       final refreshToken = await _storage.read(key: 'refresh_token');
-      if (refreshToken == null) {
-        throw Exception('No refresh token available');
-      }
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        final refreshDio = Dio(BaseOptions(
+          baseUrl: _effectiveBaseUrl,
+          connectTimeout: const Duration(seconds: 5),
+          receiveTimeout: const Duration(seconds: 5),
+        ));
+        final response = await refreshDio.post(
+          '/auth/token/refresh/',
+          data: {'refresh': refreshToken},
+        );
 
-      final refreshDio = Dio(BaseOptions(
-        baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 5),
-        receiveTimeout: const Duration(seconds: 5),
-      ));
-      final response = await refreshDio.post(
-        '/auth/token/refresh/',
-        data: {'refresh': refreshToken},
-      );
+        final access = response.data['access'];
+        if (access is String && access.isNotEmpty) {
+          await _storage.write(key: 'access_token', value: access);
 
-      final newAccessToken = response.data['access'];
-      if (newAccessToken != null) {
-        await _storage.write(key: 'access_token', value: newAccessToken);
-        
-        final newRefreshToken = response.data['refresh'];
-        if (newRefreshToken != null) {
-          await _storage.write(key: 'refresh_token', value: newRefreshToken);
+          final rotated = response.data['refresh'];
+          if (rotated is String && rotated.isNotEmpty) {
+            await _storage.write(key: 'refresh_token', value: rotated);
+          }
+          newAccessToken = access;
         }
-        
-        _refreshCompleter?.complete(newAccessToken);
-        return newAccessToken;
       }
-      
-      throw Exception('Invalid token response');
-    } catch (e) {
-      _refreshCompleter?.completeError(e);
-      _refreshCompleter = null;
-      rethrow;
+    } catch (_) {
+      // Un refresco fallido se comunica como ausencia de token: quien espera
+      // ya lo interpreta como sesión caducada.
+      newAccessToken = null;
     } finally {
       _isRefreshing = false;
       _refreshCompleter = null;
+      // Se completa una sola vez y siempre con un valor, para que las
+      // peticiones que esperaban este mismo refresco no queden colgadas.
+      if (!completer.isCompleted) {
+        completer.complete(newAccessToken);
+      }
     }
+
+    return newAccessToken;
   }
 
   Future<void> _logout() async {
