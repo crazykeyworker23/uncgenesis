@@ -233,22 +233,40 @@ def send_notification(notification):
 
 def dispatch(notification):
     """
-    Pone en marcha el envío de una notificación ya creada.
+    Entrega el aviso en el momento y deja anotado cómo fue.
 
-    Lo normal es encolarlo para no hacer esperar a quien la escribió. Si el
-    broker no responde se envía en el momento: es preferible tardar un segundo
-    más que perder el aviso. En ningún caso se propaga el fallo, porque la
-    notificación ya está registrada y debe verse dentro de la app.
+    Antes esto se encolaba en Celery. Parece más prudente, pero si el trabajador
+    no estaba levantado `.delay()` no da ningún error: la tarea se quedaba en la
+    cola, nadie la ejecutaba y el panel seguía mostrando «enviado». El fallo era
+    invisible justo cuando más importaba, y no había forma de distinguirlo de un
+    envío correcto.
+
+    Un envío son una o dos llamadas a Firebase —los destinatarios van en lotes
+    de 500—, así que hacerlo aquí cuesta poco y a cambio el estado que se
+    muestra es verdad. Los avisos programados sí siguen pasando por Celery, que
+    es para lo que sirve.
+
+    Nunca propaga el fallo: la notificación ya está registrada y debe verse
+    dentro de la app aunque no haya salido al teléfono.
     """
-    from .tasks import send_push_notification_task
+    from django.utils import timezone
+
+    from .models import NotificationStatus
 
     try:
-        send_push_notification_task.delay(notification.id)
-        return
+        resultado = send_notification(notification)
     except Exception as error:
-        logger.warning('No se pudo encolar el envío (%s); se intenta en el momento.', error)
+        logger.error('No se pudo enviar la notificación %s: %s', notification.id, error)
+        resultado = {'sent': 0, 'failed': 0, 'detail': f'Error al enviar: {error}'}
+
+    notification.error_message = '' if resultado['sent'] else resultado['detail']
+    if notification.status != NotificationStatus.SENT:
+        notification.status = NotificationStatus.SENT
+        notification.sent_at = timezone.now()
 
     try:
-        send_notification(notification)
+        notification.save(update_fields=['status', 'sent_at', 'error_message'])
     except Exception as error:
-        logger.error('Tampoco se pudo enviar en el momento: %s', error)
+        logger.error('No se pudo anotar el resultado del envío: %s', error)
+
+    return resultado

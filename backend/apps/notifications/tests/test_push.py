@@ -222,6 +222,56 @@ class TestEnvioReal:
         assert capturado['data']['deep_link'] == '/devotionals/pan-de-vida'
         assert capturado['data']['click_action'] == 'FLUTTER_NOTIFICATION_CLICK'
 
+    def test_el_resultado_del_envio_queda_anotado_en_el_aviso(self, settings, con_dispositivo):
+        """
+        Antes el envío se encolaba en Celery: si el trabajador estaba caído la
+        tarea se quedaba en la cola sin ejecutarse y el panel seguía mostrando
+        «enviado». El fallo era indistinguible de un envío correcto.
+        """
+        from apps.notifications.push import dispatch
+
+        settings.FIREBASE_CREDENTIALS = None
+        con_dispositivo('alguien@push.org', RoleType.MEMBER)
+
+        aviso = Notification.objects.create(
+            title='Comunicado', body='x',
+            target_audience=TargetAudience.ALL,
+            status=NotificationStatus.PENDING,
+        )
+
+        dispatch(aviso)
+
+        aviso.refresh_from_db()
+        assert aviso.status == NotificationStatus.SENT
+        assert aviso.sent_at is not None
+        # El motivo por el que no salió al teléfono queda a la vista.
+        assert 'FIREBASE_CREDENTIALS' in aviso.error_message
+
+    def test_un_envio_correcto_no_deja_motivo_de_error(self, con_dispositivo, monkeypatch):
+        from firebase_admin import messaging
+
+        from apps.notifications import push
+        from apps.notifications.push import dispatch
+
+        con_dispositivo('recibe@push.org', RoleType.MEMBER, token='token-ok')
+        monkeypatch.setattr(push, 'get_firebase_app', lambda: object())
+
+        class Resultado:
+            responses = []
+            success_count = 1
+            failure_count = 0
+
+        monkeypatch.setattr(messaging, 'send_each', lambda mensajes, app=None: Resultado())
+
+        aviso = Notification.objects.create(
+            title='Va bien', body='x', target_audience=TargetAudience.ALL
+        )
+        dispatch(aviso)
+
+        aviso.refresh_from_db()
+        assert aviso.error_message == ''
+        assert aviso.status == NotificationStatus.SENT
+
     def test_sin_dispositivos_no_falla(self, settings, monkeypatch, db):
         from apps.notifications import push
 
