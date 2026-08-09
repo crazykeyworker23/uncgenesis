@@ -82,6 +82,10 @@ class Notification(models.Model):
         choices=NotificationStatus.choices,
         default=NotificationStatus.PENDING
     )
+    # Vista que debe abrirse al tocar el aviso, como ruta de la app
+    # ('/devotionals/mi-slug', '/cells/3'). Vacío significa que se abre el
+    # listado de notificaciones, que es lo razonable para un aviso suelto.
+    deep_link = models.CharField(max_length=200, blank=True, default='')
     scheduled_for = models.DateTimeField(null=True, blank=True)
     sent_at = models.DateTimeField(null=True, blank=True)
     error_message = models.TextField(blank=True)

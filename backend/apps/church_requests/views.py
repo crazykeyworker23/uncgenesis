@@ -126,8 +126,15 @@ class VisitorRequestViewSet(viewsets.ModelViewSet):
 
                 # Send Notification & Push Notification
                 try:
-                    from apps.notifications.models import Notification, NotificationStatus, FCMDevice
                     from django.utils import timezone
+
+                    from apps.notifications.models import (
+                        Notification,
+                        NotificationStatus,
+                        TargetAudience,
+                    )
+                    from apps.notifications.push import dispatch
+
                     title = "¡Bienvenido a tu nueva Célula! 🎉"
                     cell_name = obj.cell_group.name
                     body = f"Hola {target_user.first_name or target_user.full_name or 'hermano'}, tu solicitud ha sido aprobada. Ahora formas parte de '{cell_name}'. ¡Te esperamos!"
@@ -135,24 +142,23 @@ class VisitorRequestViewSet(viewsets.ModelViewSet):
                     notification = Notification.objects.create(
                         title=title,
                         body=body,
+                        # El aviso es para esa persona. Antes se creaba sin
+                        # destinatario y con el correo anotado en el campo de
+                        # error: al enviarlo de verdad habría salido a toda la
+                        # iglesia.
+                        target_audience=TargetAudience.USER,
+                        target_user=target_user,
+                        # Le lleva directamente a la célula a la que acaba de entrar.
+                        deep_link=f'/cells/{obj.cell_group_id}',
                         status=NotificationStatus.SENT,
                         scheduled_for=timezone.now(),
                         sent_at=timezone.now(),
-                        error_message=f"Aprobación de célula para {target_user.email}"
                     )
 
-                    devices = FCMDevice.objects.filter(user=target_user)
-                    tokens = list(devices.values_list('token', flat=True).distinct())
-                    if tokens:
-                        from apps.notifications.tasks import firebase_app
-                        if firebase_app:
-                            from firebase_admin import messaging
-                            message = messaging.MulticastMessage(
-                                notification=messaging.Notification(title=title, body=body),
-                                tokens=tokens,
-                            )
-                            messaging.send_multicast(message)
-                except Exception as e:
+                    dispatch(notification)
+                except Exception:
+                    # La asignación de célula ya se guardó: que falle el aviso
+                    # no debe deshacerla.
                     pass
 
     def perform_update(self, serializer):

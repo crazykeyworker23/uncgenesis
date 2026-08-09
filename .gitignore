@@ -119,3 +119,7 @@ mobile-app/pubspec.lock.backup
 *.bak
 *.swp
 *.tmp
+
+# Credenciales de la cuenta de servicio de Firebase (nunca al repositorio)
+backend/secrets/*
+!backend/secrets/README.md

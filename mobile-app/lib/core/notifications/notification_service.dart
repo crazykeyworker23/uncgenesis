@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../../app/router/app_router.dart';
 import '../network/api_client.dart';
 import '../widgets/in_app_notification_banner.dart';
 
@@ -57,11 +58,34 @@ class NotificationService {
     }
   }
 
+  /// Canal por el que Android muestra los avisos con la app cerrada.
+  ///
+  /// El mismo identificador viaja en cada mensaje desde el servidor
+  /// (`channel_id` en `apps/notifications/push.py`) y está declarado en el
+  /// AndroidManifest como canal por defecto: los tres deben coincidir.
+  static const AndroidNotificationChannel _canal = AndroidNotificationChannel(
+    'genesis_channel',
+    'Notificaciones Génesis',
+    description: 'Avisos de la iglesia: devocionales, eventos y recordatorios.',
+    // Importancia máxima: es lo que hace que el aviso salte sobre la pantalla
+    // en lugar de quedarse callado en la barra de estado.
+    importance: Importance.max,
+    playSound: true,
+    enableVibration: true,
+  );
+
   Future<void> initLocalNotifications() async {
     try {
       const androidSettings = AndroidInitializationSettings('@drawable/ic_notification');
       const initSettings = InitializationSettings(android: androidSettings);
       await _localNotificationsPlugin.initialize(initSettings);
+
+      // Sin este registro el canal no existe, y con la app cerrada Android
+      // descartaba el aviso o lo mostraba en un canal silencioso de reserva:
+      // la notificación se enviaba pero el teléfono no avisaba de nada.
+      await _localNotificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(_canal);
     } catch (e) {
       debugPrint("initLocalNotifications error: $e");
     }
@@ -270,6 +294,42 @@ class NotificationService {
     final body = message.notification?.body ?? message.data['body'] ?? 'Tienes un nuevo mensaje.';
     saveToHistory(title, body);
     debugPrint("Tapped notification payload: ${message.data}");
+    _abrirDestino(message.data['deep_link'] as String?);
+  }
+
+  /// Rutas que un aviso puede abrir. Se comprueba contra esta lista para que un
+  /// mensaje con una ruta inesperada no deje la app en una pantalla de error.
+  static const _destinosPermitidos = [
+    '/devotionals',
+    '/events',
+    '/publications',
+    '/services',
+    '/cells',
+    '/notifications',
+  ];
+
+  Future<void> _abrirDestino(String? ruta) async {
+    final destino = (ruta != null && ruta.isNotEmpty &&
+            _destinosPermitidos.any((permitido) => ruta.startsWith(permitido)))
+        ? ruta
+        // Un aviso suelto (un comunicado, por ejemplo) no apunta a ninguna
+        // pantalla concreta: se abre el listado de notificaciones.
+        : '/notifications';
+
+    // Si la app venía cerrada, el splash todavía está decidiendo a dónde ir.
+    // Navegar antes de que termine haría que nos pisara la ruta y el usuario
+    // acabaría en el inicio en lugar de en lo que tocó.
+    for (var intento = 0; intento < 30; intento++) {
+      final actual = appRouter.routerDelegate.currentConfiguration.uri.path;
+      if (actual != '/splash' && actual != '/') break;
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
+
+    try {
+      appRouter.go(destino);
+    } catch (e) {
+      debugPrint('No se pudo abrir el destino del aviso ($destino): $e');
+    }
   }
 
   Future<NotificationSettings> requestNotificationPermission() async {

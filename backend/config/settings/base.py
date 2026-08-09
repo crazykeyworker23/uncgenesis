@@ -186,5 +186,45 @@ EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # Firebase configurations
-FIREBASE_CREDENTIALS = env.json('FIREBASE_CREDENTIALS', default=None)
+#
+# Se admiten dos formas, porque pegar el JSON entero de la cuenta de servicio
+# dentro de una variable de entorno es fácil de estropear (la clave privada
+# lleva saltos de línea):
+#
+#   FIREBASE_CREDENTIALS={"type":"service_account", ...}   ← JSON en una línea
+#   FIREBASE_CREDENTIALS=/etc/genesis/firebase.json        ← ruta al archivo
+#
+# Antes se usaba `env.json`, que revienta al arrancar si el valor no es JSON
+# válido: un error de copiado dejaba el servidor entero sin levantar. Ahora se
+# anota el problema y el sitio funciona; sólo dejan de salir los avisos al
+# teléfono, y quedan igualmente registrados dentro de la app.
+def _cargar_credenciales_firebase():
+    import json
+    import logging
+
+    valor = (env('FIREBASE_CREDENTIALS', default='') or '').strip()
+    if not valor:
+        return None
+
+    if valor.startswith('{'):
+        try:
+            return json.loads(valor)
+        except ValueError:
+            logging.getLogger('config.settings').error(
+                'FIREBASE_CREDENTIALS no es un JSON válido: las notificaciones '
+                'quedarán registradas pero no saldrán al teléfono.'
+            )
+            return None
+
+    if os.path.exists(valor):
+        # firebase_admin acepta directamente la ruta del archivo.
+        return valor
+
+    logging.getLogger('config.settings').error(
+        'FIREBASE_CREDENTIALS apunta a un archivo que no existe (%s).', valor
+    )
+    return None
+
+
+FIREBASE_CREDENTIALS = _cargar_credenciales_firebase()
 

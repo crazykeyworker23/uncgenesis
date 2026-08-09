@@ -158,12 +158,17 @@ class CellGroupViewSet(CellManagementMixin, viewsets.ModelViewSet):
             sender=request.user,
             target_audience=TargetAudience.CELL,
             target_cell=cell,
+            # Tocar el recordatorio abre la ficha de la célula.
+            deep_link=f'/cells/{cell.id}',
             scheduled_for=scheduled,
             status=NotificationStatus.SENT if is_immediate else NotificationStatus.PENDING,
             sent_at=timezone.now() if is_immediate else None,
         )
 
-        if not is_immediate:
+        if is_immediate:
+            from apps.notifications.push import dispatch
+            dispatch(notification)
+        else:
             try:
                 send_push_notification_task.apply_async((notification.id,), eta=scheduled)
             except Exception:

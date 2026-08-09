@@ -6,6 +6,21 @@ from apps.roles.models import Role, RoleType, UserRole
 User = get_user_model()
 
 
+@pytest.fixture(autouse=True)
+def sin_envio_push_real(settings):
+    """
+    Las pruebas no envían notificaciones de verdad.
+
+    Sin esto, cualquier prueba que cree una notificación intentaría contactar
+    con Firebase usando las credenciales del `.env` de quien las ejecuta: sería
+    lenta, dependería de la red y podría llegar a teléfonos reales.
+
+    Quien necesite probar el envío lo simula explícitamente, como en
+    apps/notifications/tests/test_push.py.
+    """
+    settings.FIREBASE_CREDENTIALS = None
+
+
 @pytest.fixture
 def api_client():
     return APIClient()

@@ -47,6 +47,8 @@ def schedule_devotional_notification(devotional, sender):
                 'sender': sender,
                 'target_audience': TargetAudience.ALL,
                 'target_user': None,
+                # Al tocar el aviso se abre este devocional, no el listado.
+                'deep_link': f'/devotionals/{devotional.slug}',
                 'scheduled_for': scheduled_dt,
                 'status': status_val,
                 'sent_at': sent_val,
@@ -58,6 +60,9 @@ def schedule_devotional_notification(devotional, sender):
                 send_push_notification_task.apply_async((notif.id,), eta=scheduled_dt)
             except Exception:
                 pass
+        else:
+            from apps.notifications.push import dispatch
+            dispatch(notif)
     except Exception:
         pass
 

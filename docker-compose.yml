@@ -32,6 +32,10 @@ services:
     volumes:
       - staticfiles_data:/app/staticfiles
       - media_data:/app/media
+      # Clave de Firebase: el contenedor no ve el sistema de archivos del
+      # servidor, asi que sin este montaje FIREBASE_CREDENTIALS=/app/secrets/...
+      # apuntaria a un archivo inexistente y los avisos no saldrian al telefono.
+      - ./backend/secrets:/app/secrets:ro
     environment:
       # Sin esta variable, wsgi.py caia en config.settings.development y el
       # servidor corria con DEBUG=True, CORS abierto y Celery en modo eager.
@@ -60,6 +64,9 @@ services:
     container_name: genesis_celery_worker
     restart: always
     command: celery -A config worker --loglevel=info
+    volumes:
+      - ./backend/secrets:/app/secrets:ro
+      - media_data:/app/media
     environment:
       - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
       - DATABASE_URL=postgres://${POSTGRES_USER:-genesis_admin}:${POSTGRES_PASSWORD:-genesis_secure_password}@db:5432/${POSTGRES_DB:-genesis_db}
@@ -84,6 +91,9 @@ services:
     container_name: genesis_celery_beat
     restart: always
     command: celery -A config beat --loglevel=info
+    volumes:
+      - ./backend/secrets:/app/secrets:ro
+      - media_data:/app/media
     environment:
       - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-config.settings.production}
       - DATABASE_URL=postgres://${POSTGRES_USER:-genesis_admin}:${POSTGRES_PASSWORD:-genesis_secure_password}@db:5432/${POSTGRES_DB:-genesis_db}

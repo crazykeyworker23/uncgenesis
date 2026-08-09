@@ -131,7 +131,11 @@ class NotificationViewSet(viewsets.ModelViewSet):
             sent_at=sent_time
         )
         
-        if not is_immediate:
+        if is_immediate:
+            # Antes sólo se marcaba como enviada: nunca salía al telefono.
+            from .push import dispatch
+            dispatch(notification)
+        else:
             send_push_notification_task.apply_async((notification.id,), eta=scheduled)
 
     @action(detail=True, methods=['post'], url_path='send-now')
