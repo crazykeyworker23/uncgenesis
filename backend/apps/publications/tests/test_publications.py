@@ -145,3 +145,63 @@ def test_duplicate_publication(staff_client, publication):
     assert cloned.title == f"Copia de {publication.title}"
     assert cloned.status == PublicationStatus.DRAFT
     assert cloned.tags.count() == publication.tags.count()
+
+
+@pytest.mark.django_db
+def test_cover_image_can_be_uploaded_as_a_file(staff_client, category):
+    """
+    La portada debe poder subirse como archivo, no sólo pegando una URL.
+
+    El panel enviaba texto porque el formulario no tenía selector de archivo;
+    el API sí acepta la subida y esto lo deja fijado.
+    """
+    import io
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new('RGB', (16, 16), color=(212, 175, 55)).save(buffer, format='PNG')
+    buffer.seek(0)
+    portada = SimpleUploadedFile('portada.png', buffer.read(), content_type='image/png')
+
+    url = reverse('publication-list')
+    res = staff_client.post(
+        url,
+        {
+            'title': 'Con portada subida',
+            'summary': 'Resumen',
+            'content': 'Contenido',
+            'category': category.id,
+            'cover_image': portada,
+        },
+        format='multipart',
+    )
+
+    assert res.status_code == status.HTTP_201_CREATED
+    assert res.data['cover_image'], 'la publicación debe devolver la portada'
+    assert res.data['cover_image'].startswith('http')
+
+
+@pytest.mark.django_db
+def test_publication_keeps_its_cover_when_edited_without_touching_it(staff_client, publication):
+    """Editar el texto no debe borrar la portada ya guardada."""
+    import io
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new('RGB', (16, 16), color=(4, 47, 48)).save(buffer, format='PNG')
+    buffer.seek(0)
+    publication.cover_image.save('previa.png', SimpleUploadedFile(
+        'previa.png', buffer.read(), content_type='image/png'
+    ))
+
+    detail = reverse('publication-detail', kwargs={'pk': publication.id})
+    res = staff_client.patch(detail, {'title': 'Título corregido'}, format='json')
+
+    assert res.status_code == status.HTTP_200_OK
+    publication.refresh_from_db()
+    assert publication.title == 'Título corregido'
+    assert publication.cover_image, 'la portada debía conservarse'

@@ -8,7 +8,9 @@ import {
   Eye, 
   Globe, 
   Settings, 
-  Info
+  Info,
+  Image as ImageIcon,
+  X
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { PublicationCategory, PublicationContentType } from '../features/publications/types';
@@ -20,6 +22,10 @@ export const PublicationForm: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Portada elegida desde el equipo. La URL guardada sigue en el formulario,
+  // para no perder la que ya tuviera la publicación al editarla.
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
     defaultValues: {
@@ -115,15 +121,32 @@ export const PublicationForm: React.FC = () => {
         send_notification: formData.send_notification,
         seo_title: formData.seo_title,
         seo_description: formData.seo_description,
-        // Since we are simulating, we can send a text image or handle files.
-        // If it starts with http, we can pass it, otherwise send null/empty.
-        cover_image: formData.cover_image_url || null
+        // Sin archivo nuevo se conserva lo que ya hubiera: la dirección de la
+        // portada actual, o nada si nunca tuvo.
+        cover_image: formData.cover_image_url || null,
       };
 
+      // Con una imagen elegida la petición viaja como formulario, que es como
+      // se suben archivos; sin ella, como JSON.
+      let body: any = payload;
+      let config: any = undefined;
+
+      if (coverFile) {
+        const data = new FormData();
+        Object.entries(payload).forEach(([key, value]) => {
+          if (key === 'cover_image') return;
+          if (value === null || value === undefined) return;
+          data.append(key, String(value));
+        });
+        data.append('cover_image', coverFile);
+        body = data;
+        config = { headers: { 'Content-Type': 'multipart/form-data' } };
+      }
+
       if (isEdit) {
-        return apiClient.put(`/publications/${id}/`, payload);
+        return apiClient.put(`/publications/${id}/`, body, config);
       } else {
-        return apiClient.post('/publications/', payload);
+        return apiClient.post('/publications/', body, config);
       }
     },
     onSuccess: () => {
@@ -257,15 +280,56 @@ export const PublicationForm: React.FC = () => {
                 </div>
               </div>
 
-              {/* Cover Image Input */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-crema text-opacity-65 ml-1">URL de Portada (Simulado)</label>
-                <input
-                  type="text"
-                  placeholder="https://ejemplo.com/portada.jpg"
-                  className="w-full glass-input text-xs"
-                  {...register('cover_image_url')}
-                />
+              {/* Portada */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-crema text-opacity-65 ml-1">
+                  Imagen de portada
+                </label>
+
+                {coverPreview || watchedCoverUrl ? (
+                  <div className="relative inline-block">
+                    <img
+                      src={coverPreview || watchedCoverUrl}
+                      alt="Portada de la publicación"
+                      className="max-h-44 rounded-xl border border-white border-opacity-10"
+                    />
+                    <button
+                      type="button"
+                      title="Quitar la portada"
+                      onClick={() => {
+                        if (coverPreview) URL.revokeObjectURL(coverPreview);
+                        setCoverFile(null);
+                        setCoverPreview(null);
+                        setValue('cover_image_url', '');
+                      }}
+                      className="absolute -top-2 -right-2 p-1.5 rounded-full bg-error-red text-white shadow-lg"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center gap-2 px-4 py-7 border border-dashed border-white border-opacity-15 rounded-xl cursor-pointer hover:border-dorado hover:border-opacity-50 transition-all">
+                    <ImageIcon className="w-6 h-6 text-crema text-opacity-35" />
+                    <span className="text-[11px] text-crema text-opacity-50">
+                      Toca para elegir una imagen de portada
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        if (coverPreview) URL.revokeObjectURL(coverPreview);
+                        setCoverFile(file);
+                        setCoverPreview(file ? URL.createObjectURL(file) : null);
+                      }}
+                    />
+                  </label>
+                )}
+
+                <p className="text-[10px] text-crema text-opacity-40 ml-1">
+                  Se muestra en la tarjeta de la publicación dentro de la app.
+                </p>
               </div>
 
               {/* Summary */}
