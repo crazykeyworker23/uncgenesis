@@ -9,6 +9,7 @@ y qué ocurre cuando no hay credenciales.
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
 from apps.cells.models import CellGroup, MeetingDay
 from apps.notifications.models import (
@@ -284,3 +285,81 @@ class TestEnvioReal:
 
         assert resultado['sent'] == 0
         assert 'dispositivos' in resultado['detail']
+
+
+@pytest.mark.django_db
+class TestAvisosProgramados:
+    """
+    La ronda de repesca recoge lo que quedó pendiente, sin repetir envíos.
+
+    Dos caminos pueden pedir el mismo envío: la tarea que se programó para la
+    hora del aviso y esta ronda periódica. Que ninguno de los dos duplique el
+    aviso en el teléfono de la gente es lo que se fija aquí.
+    """
+
+    @pytest.fixture
+    def envios(self, monkeypatch):
+        """Cuenta los envíos sin llegar a contactar con Firebase."""
+        from apps.notifications import tasks
+
+        realizados = []
+
+        def _falso_envio(notification):
+            realizados.append(notification.id)
+            return {'sent': 1, 'failed': 0, 'detail': 'Entregada a 1 dispositivo(s).'}
+
+        monkeypatch.setattr(tasks, 'send_notification', _falso_envio)
+        return realizados
+
+    def test_un_aviso_ya_entregado_no_sale_dos_veces(self, envios):
+        from apps.notifications.tasks import send_push_notification_task
+
+        aviso = Notification.objects.create(
+            title='Una sola vez', body='x',
+            target_audience=TargetAudience.ALL,
+            status=NotificationStatus.PENDING,
+            scheduled_for=timezone.now(),
+        )
+
+        send_push_notification_task(aviso.id)
+        send_push_notification_task(aviso.id)
+
+        assert envios == [aviso.id]
+
+    def test_la_ronda_entrega_lo_vencido_y_respeta_lo_que_falta(self, envios):
+        from apps.notifications.tasks import deliver_pending_notifications
+
+        vencido = Notification.objects.create(
+            title='Se pasó la hora', body='x',
+            target_audience=TargetAudience.ALL,
+            status=NotificationStatus.PENDING,
+            scheduled_for=timezone.now() - timezone.timedelta(minutes=10),
+        )
+        Notification.objects.create(
+            title='Todavía no toca', body='x',
+            target_audience=TargetAudience.ALL,
+            status=NotificationStatus.PENDING,
+            scheduled_for=timezone.now() + timezone.timedelta(hours=3),
+        )
+
+        assert deliver_pending_notifications() == 1
+        assert envios == [vencido.id]
+
+        vencido.refresh_from_db()
+        assert vencido.status == NotificationStatus.SENT
+        assert vencido.sent_at is not None
+
+    def test_la_ronda_no_repite_lo_que_ya_salio(self, envios):
+        from apps.notifications.tasks import deliver_pending_notifications
+
+        Notification.objects.create(
+            title='Reintento', body='x',
+            target_audience=TargetAudience.ALL,
+            status=NotificationStatus.PENDING,
+            scheduled_for=timezone.now() - timezone.timedelta(minutes=10),
+        )
+
+        deliver_pending_notifications()
+        # La segunda vuelta de Celery Beat ya no encuentra nada pendiente.
+        assert deliver_pending_notifications() == 0
+        assert len(envios) == 1

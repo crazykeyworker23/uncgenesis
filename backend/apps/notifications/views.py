@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -9,6 +11,8 @@ from apps.roles.permissions import HasAppPermission
 from .models import FCMDevice, Notification, NotificationStatus
 from .serializers import FCMDeviceSerializer, NotificationSerializer
 from .tasks import send_push_notification_task
+
+logger = logging.getLogger(__name__)
 
 PERM_MAP = {
     'list': 'NOTIFICATIONS_VIEW',
@@ -136,7 +140,13 @@ class NotificationViewSet(viewsets.ModelViewSet):
             from .push import dispatch
             dispatch(notification)
         else:
-            send_push_notification_task.apply_async((notification.id,), eta=scheduled)
+            try:
+                send_push_notification_task.apply_async((notification.id,), eta=scheduled)
+            except Exception as error:
+                # Que el broker no responda no debe tumbar la creación del
+                # aviso: queda pendiente y la ronda de Celery Beat lo entrega
+                # en cuanto venza su hora.
+                logger.warning('No se pudo programar el aviso %s: %s', notification.id, error)
 
     @action(detail=True, methods=['post'], url_path='send-now')
     def send_now(self, request, pk=None):
@@ -152,10 +162,15 @@ class NotificationViewSet(viewsets.ModelViewSet):
         notification.scheduled_for = timezone.now()
         notification.error_message = ""
         notification.save()
-        
-        # Trigger task immediately
-        send_push_notification_task.delay(notification.id)
-        
+
+        # Se entrega aquí mismo. Antes se delegaba en Celery, así que si el
+        # trabajador no estaba levantado el botón «Enviar ahora» devolvía un
+        # error, y si el broker respondía pero nadie procesaba la cola no pasaba
+        # nada en absoluto. Enviando en el momento se sabe si salió o no.
+        from .push import dispatch
+        dispatch(notification)
+
+        notification.refresh_from_db()
         serializer = self.get_serializer(notification)
         return Response(serializer.data)
 

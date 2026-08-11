@@ -31,12 +31,27 @@ def send_push_notification_task(notification_id):
         logger.error('La notificación %s ya no existe.', notification_id)
         return
 
+    # El aviso se reserva antes de enviarlo, cambiando su estado en una sola
+    # operación de base de datos. Ahora hay dos caminos que pueden pedir el
+    # mismo envío —la tarea programada con `eta` y la ronda de repesca de cada
+    # cinco minutos—, y sin esta reserva la gente recibiría el aviso dos veces:
+    # si la ronda pasa justo cuando vence la hora, o mientras un envío largo
+    # sigue en curso, encolaría un duplicado. Quien llega primero se lo queda.
+    reservado = Notification.objects.filter(
+        id=notification_id,
+        status__in=[NotificationStatus.PENDING, NotificationStatus.FAILED],
+    ).update(status=NotificationStatus.SENT, sent_at=timezone.now())
+
+    if not reservado:
+        logger.info('La notificación %s ya estaba entregada; no se repite.', notification_id)
+        return
+
     resultado = send_notification(notification)
 
     notification.status = NotificationStatus.SENT
-    notification.sent_at = timezone.now()
     notification.error_message = '' if resultado['sent'] else resultado['detail']
-    notification.save()
+    # `sent_at` ya quedó anotado al reservar el aviso; no se vuelve a tocar.
+    notification.save(update_fields=['status', 'error_message'])
 
     logger.info('Notificación %s: %s', notification_id, resultado['detail'])
     return resultado
@@ -49,16 +64,23 @@ def deliver_pending_notifications():
 
     Cubre el caso de que el envío fallara por una caída momentánea de red o
     porque el servidor estuviera reiniciándose a la hora programada.
+
+    Encolar un aviso que ya salió no lo duplica: la tarea de envío lo reserva
+    antes de entregarlo y descarta la repetición.
     """
-    vencidas = Notification.objects.filter(
-        status=NotificationStatus.PENDING,
-        scheduled_for__lte=timezone.now(),
+    # La lista se materializa aquí: al encolar, cada aviso pasa a «enviado», de
+    # modo que volver a contar la consulta al final devolvía cero.
+    vencidas = list(
+        Notification.objects.filter(
+            status=NotificationStatus.PENDING,
+            scheduled_for__lte=timezone.now(),
+        ).values_list('id', flat=True)
     )
 
-    for notification in vencidas:
-        send_push_notification_task.delay(notification.id)
+    for notification_id in vencidas:
+        send_push_notification_task.delay(notification_id)
 
-    return vencidas.count()
+    return len(vencidas)
 
 
 __all__ = [

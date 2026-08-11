@@ -185,6 +185,35 @@ EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
+# Celery
+#
+# Estas dos claves no estaban definidas en ninguna parte. Celery, al no
+# encontrarlas, usaba su valor por omisión —RabbitMQ en localhost—, que aquí no
+# existe: el trabajador llevaba desde el principio sin poder conectarse. El
+# efecto era silencioso y difícil de ver: los avisos programados (entre ellos el
+# recordatorio de los devocionales a las 7:00) nunca llegaban a ejecutarse.
+#
+# CELERY_BROKER_URL se define en docker-compose apuntando a una base de Redis
+# distinta a la de la caché, para que vaciar la caché no se lleve por delante
+# la cola. Si no viniera, se cae a REDIS_URL: con la cola compartida se pierden
+# tareas al limpiar la caché, pero al menos el trabajador arranca.
+CELERY_BROKER_URL = env(
+    'CELERY_BROKER_URL',
+    default=env('REDIS_URL', default='redis://redis:6379/0'),
+)
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default=CELERY_BROKER_URL)
+CELERY_TIMEZONE = TIME_ZONE
+
+# Red de seguridad: si un envío programado se pierde porque el servidor estaba
+# reiniciándose o el broker no respondía, esta ronda lo recoge igualmente en
+# cuanto vence su hora, en lugar de dejarlo pendiente para siempre.
+CELERY_BEAT_SCHEDULE = {
+    'entregar-notificaciones-pendientes': {
+        'task': 'apps.notifications.tasks.deliver_pending_notifications',
+        'schedule': 300.0,  # cada 5 minutos
+    },
+}
+
 # Firebase configurations
 #
 # Se admiten dos formas, porque pegar el JSON entero de la cuenta de servicio

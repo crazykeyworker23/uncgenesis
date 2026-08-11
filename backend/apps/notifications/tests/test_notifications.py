@@ -221,10 +221,15 @@ class TestNotificationManagement:
 
         res = auth_client.post(notification_send_now(notification.id))
         assert res.status_code == status.HTTP_200_OK
-        
+
         notification.refresh_from_db()
         assert notification.status == NotificationStatus.SENT
         assert notification.sent_at is not None
+        # El botón entrega en el momento y devuelve el resultado real. Antes
+        # delegaba en Celery: con el trabajador caído respondía un error, y con
+        # el broker en pie pero sin nadie procesando la cola no ocurría nada.
+        assert 'FIREBASE_CREDENTIALS' in notification.error_message
+        assert res.data['error_message'] == notification.error_message
 
     def test_create_notification_specific_user(self, auth_client, create_user):
         """Sending notification to a specific user filters target devices correctly."""
