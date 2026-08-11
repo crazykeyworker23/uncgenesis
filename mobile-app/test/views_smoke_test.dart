@@ -20,6 +20,12 @@ import 'package:genesis_app/features/notifications/presentation/pages/notificati
 import 'package:genesis_app/features/profile/presentation/pages/profile_page.dart';
 import 'package:genesis_app/features/profile/presentation/pages/profile_edit_page.dart';
 import 'package:genesis_app/features/profile/presentation/pages/settings_page.dart';
+import 'package:genesis_app/features/leader/presentation/pages/leader_home_page.dart';
+import 'package:genesis_app/features/leader/presentation/pages/cell_members_page.dart';
+import 'package:genesis_app/features/leader/presentation/pages/cell_meetings_page.dart';
+import 'package:genesis_app/features/leader/presentation/pages/cell_follow_ups_page.dart';
+import 'package:genesis_app/features/leader/presentation/pages/cell_reports_page.dart';
+import 'package:genesis_app/features/leader/presentation/pages/cell_announcement_page.dart';
 
 import 'package:genesis_app/core/providers/core_providers.dart';
 
@@ -69,6 +75,19 @@ class FakeSecureStorage extends Fake implements FlutterSecureStorage {
 }
 
 class MockAdapter implements HttpClientAdapter {
+  /// Con `false`, `/auth/me/` responde como un miembro corriente: sirve para
+  /// comprobar que la gestión de célula no se le ofrece.
+  final bool asLeader;
+
+  MockAdapter({this.asLeader = false});
+
+  static const _leaderScope =
+      '"roles":["CELL_LEADER"],"permissions":["MEETINGS_VIEW","MEETINGS_CREATE","MEETINGS_EDIT",'
+      '"MEETINGS_DELETE","ATTENDANCE_VIEW","ATTENDANCE_EDIT","FOLLOWUPS_VIEW","FOLLOWUPS_CREATE",'
+      '"MEMBERS_REGISTER","MEMBERS_REMOVE","CELL_REPORTS_VIEW","CELL_REPORTS_CREATE"],'
+      '"leads_cells":1,"scope":{"scope":"OWN_CELL","church_wide":false,"cell_ids":[1],'
+      '"leads_cell_ids":[1],"coordinates_cell_ids":[]}';
+
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
@@ -79,12 +98,53 @@ class MockAdapter implements HttpClientAdapter {
     String responseString = '[]';
     int statusCode = 200;
 
-    if (path.contains('/settings/public/')) {
+    // Las rutas de gestión de célula se resuelven antes que el `/cells/`
+    // genérico, que si no se las tragaría todas.
+    if (path.contains('/cells/my-cells/')) {
+      responseString = asLeader
+          ? '{"scope":{"scope":"OWN_CELL","church_wide":false,"cell_ids":[1],'
+              '"leads_cell_ids":[1],"coordinates_cell_ids":[]},'
+              '"results":[{"id":1,"name":"Célula Norte","slug":"celula-norte",'
+              '"meeting_day":"MONDAY","meeting_time":"19:00:00","address":"Calle 1",'
+              '"status":"ACTIVE"}]}'
+          : '{"scope":{"scope":"SELF","church_wide":false,"cell_ids":[],'
+              '"leads_cell_ids":[],"coordinates_cell_ids":[]},"results":[]}';
+    } else if (path.contains('/statistics/')) {
+      responseString = '{"cell":{"id":1,"name":"Célula Norte","slug":"celula-norte"},'
+          '"members_total":3,"members_active":3,"members_inactive":0,"meetings_total":2,'
+          '"average_attendance":2.5,'
+          '"attendance_by_status":{"PRESENT":4,"ABSENT":1,"LATE":1,"EXCUSED":0},'
+          '"attendance_trend":[{"date":"2026-08-03","attendees":2,"topic":"Fe"}],'
+          '"needs_attention":1}';
+    } else if (path.contains('/members/')) {
+      responseString = '{"cell":{"id":1,"name":"Célula Norte","slug":"celula-norte"},"count":1,'
+          '"results":[{"id":30,"email":"ana@iglesia.org","first_name":"Ana","last_name":"Quispe",'
+          '"full_name":"Ana Quispe","phone":"+51999","location":"","status":"ACTIVE"}]}';
+    } else if (path.contains('/cell-meetings/')) {
+      responseString = '{"count":1,"next":null,"results":[{"id":12,"cell":1,'
+          '"cell_name":"Célula Norte","date":"2026-08-03","time":"19:00:00","topic":"Fe",'
+          '"notes":"","guests_count":0,"attendees_count":2,"attendances":['
+          '{"id":1,"member":{"id":30,"full_name":"Ana Quispe","email":"ana@iglesia.org"},'
+          '"status":"PRESENT","status_display":"Asistió","notes":""},'
+          '{"id":2,"member":{"id":31,"full_name":"Luis Rojas","email":"luis@iglesia.org"},'
+          '"status":"LATE","status_display":"Tardanza","notes":""}]}]}';
+    } else if (path.contains('/cell-follow-ups/')) {
+      responseString = '{"count":1,"next":null,"results":[{"id":5,"cell":1,'
+          '"member":{"id":30,"full_name":"Ana Quispe","email":"ana@iglesia.org"},'
+          '"type":"CALL","type_display":"Llamada","date":"2026-08-05",'
+          '"summary":"Se le llamó para animarla.","needs_attention":false}]}';
+    } else if (path.contains('/cell-reports/')) {
+      responseString = '{"count":1,"next":null,"results":[{"id":9,"cell":1,'
+          '"cell_name":"Célula Norte","period_start":"2026-07-01","period_end":"2026-07-31",'
+          '"summary":"Buen mes.","status":"DRAFT","status_display":"Borrador"}]}';
+    } else if (path.contains('/settings/public/')) {
       responseString = '{"app":{"app_name":"Génesis","app_description":"","splash_text":"","primary_color":"#000000","secondary_color":"#ffffff"},"church":{"church_name":"Iglesia","address":"","city":"","country":"","email":"","website":"","whatsapp":""},"schedules":[],"social_networks":[]}';
     } else if (path.contains('/devotionals/today/')) {
       responseString = '{"id":1,"title":"Devocional","slug":"dev","content":"Content","verse_reference":"","verse_text":"","date":"2026-07-10"}';
     } else if (path.contains('/auth/me/')) {
-      responseString = '{"id":1,"email":"t@t.com","first_name":"Test","last_name":"User","full_name":"Test User","phone":"","status":"ACTIVE"}';
+      responseString = '{"id":1,"email":"t@t.com","first_name":"Test","last_name":"User",'
+          '"full_name":"Test User","phone":"","status":"ACTIVE"'
+          '${asLeader ? ',$_leaderScope' : ''}}';
     } else if (path.contains('/auth/login/')) {
       responseString = '{"access":"access_token","refresh":"refresh_token"}';
     } else if (path.contains('/cells/')) {
@@ -116,10 +176,10 @@ class MockAdapter implements HttpClientAdapter {
 }
 
 void main() {
-  Widget createTestWidget(Widget child, {bool authenticated = true}) {
+  Widget createTestWidget(Widget child, {bool authenticated = true, bool asLeader = false}) {
     final dio = Dio();
     dio.options.baseUrl = 'http://localhost:8000/api/v1';
-    dio.httpClientAdapter = MockAdapter();
+    dio.httpClientAdapter = MockAdapter(asLeader: asLeader);
 
     final storage = FakeSecureStorage();
     if (!authenticated) {
@@ -234,6 +294,102 @@ void main() {
       await tester.pumpWidget(createTestWidget(const SettingsPage()));
       await tester.pumpAndSettle();
       expect(find.byType(SettingsPage), findsOneWidget);
+    });
+  });
+
+  /// Deja terminar las peticiones encadenadas: sesión → células a cargo →
+  /// datos de la célula.
+  ///
+  /// `pumpAndSettle` vuelve en cuanto no queda ningún fotograma pendiente, y
+  /// entre una petición y la siguiente hay instantes en los que no lo hay: sin
+  /// esto la pantalla se comprobaba a mitad de la cadena.
+  Future<void> settleRequests(WidgetTester tester) async {
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    await tester.pumpAndSettle();
+  }
+
+  group('Gestión de célula', () {
+    testWidgets('Mi Célula muestra la célula a cargo y sus accesos', (tester) async {
+      await tester.pumpWidget(createTestWidget(const LeaderHomePage(), asLeader: true));
+      await settleRequests(tester);
+
+      expect(find.text('Célula Norte'), findsOneWidget);
+      expect(find.text('Miembros'), findsOneWidget);
+      expect(find.text('Reuniones y asistencia'), findsOneWidget);
+
+      // El resto de accesos queda bajo el pliegue en una pantalla de teléfono.
+      await tester.drag(find.byType(ListView), const Offset(0, -400));
+      await tester.pumpAndSettle();
+      expect(find.text('Seguimientos'), findsOneWidget);
+      expect(find.text('Informes de actividad'), findsOneWidget);
+      expect(find.text('Enviar un aviso'), findsOneWidget);
+    });
+
+    testWidgets('sin célula a cargo se explica en lugar de quedarse en blanco', (tester) async {
+      // Un miembro corriente: no tiene ninguna célula que gestionar.
+      await tester.pumpWidget(createTestWidget(const LeaderHomePage()));
+      await settleRequests(tester);
+
+      expect(find.textContaining('no tienes una célula a tu cargo'), findsOneWidget);
+    });
+
+    testWidgets('la lista de miembros carga a los integrantes', (tester) async {
+      await tester.pumpWidget(createTestWidget(const CellMembersPage(), asLeader: true));
+      await settleRequests(tester);
+
+      expect(find.text('Ana Quispe'), findsOneWidget);
+      // Con permiso de alta, el botón para añadir está disponible.
+      expect(find.text('AÑADIR'), findsOneWidget);
+    });
+
+    testWidgets('las reuniones se listan con su asistencia', (tester) async {
+      await tester.pumpWidget(createTestWidget(const CellMeetingsPage(), asLeader: true));
+      await settleRequests(tester);
+
+      expect(find.text('Fe'), findsOneWidget);
+      expect(find.text('2 asistente(s)'), findsOneWidget);
+      expect(find.text('Pasar lista'), findsOneWidget);
+    });
+
+    testWidgets('los seguimientos se listan', (tester) async {
+      await tester.pumpWidget(createTestWidget(const CellFollowUpsPage(), asLeader: true));
+      await settleRequests(tester);
+
+      expect(find.text('Ana Quispe'), findsOneWidget);
+      expect(find.textContaining('Llamada'), findsOneWidget);
+    });
+
+    testWidgets('un informe en borrador ofrece editarlo y enviarlo', (tester) async {
+      await tester.pumpWidget(createTestWidget(const CellReportsPage(), asLeader: true));
+      await settleRequests(tester);
+
+      expect(find.text('Buen mes.'), findsOneWidget);
+      expect(find.text('ENVIAR'), findsOneWidget);
+      expect(find.text('EDITAR'), findsOneWidget);
+    });
+
+    testWidgets('el aviso dice a cuánta gente va a llegar', (tester) async {
+      await tester.pumpWidget(createTestWidget(const CellAnnouncementPage(), asLeader: true));
+      await settleRequests(tester);
+
+      expect(find.textContaining('1 persona(s) de Célula Norte'), findsOneWidget);
+      expect(find.text('ENVIAR AHORA'), findsOneWidget);
+    });
+
+    testWidgets('el perfil de un líder ofrece la gestión de su célula', (tester) async {
+      await tester.pumpWidget(createTestWidget(const ProfilePage(), asLeader: true));
+      await settleRequests(tester);
+
+      expect(find.text('Mi Célula'), findsOneWidget);
+    });
+
+    testWidgets('el perfil de un miembro corriente no la ofrece', (tester) async {
+      await tester.pumpWidget(createTestWidget(const ProfilePage()));
+      await settleRequests(tester);
+
+      expect(find.text('Mi Célula'), findsNothing);
     });
   });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'router/app_router.dart';
 import 'session_sync.dart';
@@ -17,6 +18,16 @@ class GenesisApp extends ConsumerWidget {
       title: 'Génesis App',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
+      // Toda la app está escrita en español; los diálogos que aporta Flutter
+      // —el calendario y el reloj al registrar una reunión— deben hablarlo
+      // también.
+      locale: const Locale('es'),
+      supportedLocales: const [Locale('es'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       routerConfig: appRouter,
     );
   }

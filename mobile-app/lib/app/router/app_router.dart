@@ -21,6 +21,14 @@ import '../../features/requests/presentation/pages/connect_page.dart';
 import '../../features/requests/presentation/pages/prayer_request_page.dart';
 import '../../features/requests/presentation/pages/visitor_request_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
+import '../../features/leader/presentation/pages/leader_home_page.dart';
+import '../../features/leader/presentation/pages/cell_members_page.dart';
+import '../../features/leader/presentation/pages/cell_meetings_page.dart';
+import '../../features/leader/presentation/pages/cell_attendance_page.dart';
+import '../../features/leader/presentation/pages/cell_follow_ups_page.dart';
+import '../../features/leader/presentation/pages/cell_reports_page.dart';
+import '../../features/leader/presentation/pages/cell_announcement_page.dart';
+import '../../features/leader/presentation/widgets/leader_widgets.dart';
 import '../../features/profile/presentation/pages/profile_page.dart';
 import '../../features/profile/presentation/pages/profile_edit_page.dart';
 import '../../features/profile/presentation/pages/saved_devotionals_page.dart';
@@ -248,6 +256,65 @@ final GoRouter appRouter = GoRouter(
       path: '/settings',
       builder: (BuildContext context, GoRouterState state) {
         return const SettingsPage();
+      },
+    ),
+
+    // ── Gestión de célula ───────────────────────────────────────────────────
+    // Sólo la alcanza quien tiene células a su cargo: la entrada aparece en el
+    // perfil según el alcance que devuelve /auth/me/, y cada pantalla vuelve a
+    // comprobarlo. Aun así, el servidor rechaza cualquier operación fuera de
+    // alcance: escribir la ruta a mano no da acceso a nada.
+    GoRoute(
+      parentNavigatorKey: rootNavigatorKey,
+      path: '/leader',
+      builder: (BuildContext context, GoRouterState state) {
+        return const LeaderHomePage();
+      },
+    ),
+    GoRoute(
+      parentNavigatorKey: rootNavigatorKey,
+      path: '/leader/members',
+      builder: (BuildContext context, GoRouterState state) {
+        return const CellMembersPage();
+      },
+    ),
+    GoRoute(
+      parentNavigatorKey: rootNavigatorKey,
+      path: '/leader/meetings',
+      builder: (BuildContext context, GoRouterState state) {
+        return const CellMeetingsPage();
+      },
+    ),
+    GoRoute(
+      parentNavigatorKey: rootNavigatorKey,
+      path: '/leader/meetings/:id/attendance',
+      builder: (BuildContext context, GoRouterState state) {
+        final id = int.tryParse(state.pathParameters['id'] ?? '');
+        if (id == null) {
+          return const LeaderMissingCellScaffold(title: 'Asistencia');
+        }
+        return CellAttendancePage(meetingId: id);
+      },
+    ),
+    GoRoute(
+      parentNavigatorKey: rootNavigatorKey,
+      path: '/leader/follow-ups',
+      builder: (BuildContext context, GoRouterState state) {
+        return const CellFollowUpsPage();
+      },
+    ),
+    GoRoute(
+      parentNavigatorKey: rootNavigatorKey,
+      path: '/leader/reports',
+      builder: (BuildContext context, GoRouterState state) {
+        return const CellReportsPage();
+      },
+    ),
+    GoRoute(
+      parentNavigatorKey: rootNavigatorKey,
+      path: '/leader/announce',
+      builder: (BuildContext context, GoRouterState state) {
+        return const CellAnnouncementPage();
       },
     ),
   ],

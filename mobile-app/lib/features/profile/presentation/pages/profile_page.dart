@@ -114,7 +114,19 @@ class ProfilePage extends ConsumerWidget {
                 const SizedBox(height: 24),
               ],
 
-              // 3. Actions / Menu Options
+              // 3. Gestión de célula, para quien tiene una a su cargo.
+              //
+              // No se muestra por pertenecer a una célula, sino por liderarla o
+              // supervisarla: el alcance viene resuelto desde /auth/me/.
+              if (user.leadsAnyCell) ...[
+                _LeaderMenuCard(
+                  cellCount: user.leadsCells,
+                  onTap: () => context.push('/leader'),
+                ),
+                const SizedBox(height: 20),
+              ],
+
+              // 4. Actions / Menu Options
               _ProfileMenuCard(
                 title: 'Editar Perfil',
                 icon: Icons.edit_outlined,
@@ -152,7 +164,7 @@ class ProfilePage extends ConsumerWidget {
               ),
               const SizedBox(height: 32),
 
-              // 4. Logout Button
+              // 5. Logout Button
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.error,
@@ -252,6 +264,71 @@ class _ProfileInfoRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Acceso destacado a la gestión de célula.
+///
+/// Va aparte del resto del menú y con más peso visual porque no es una opción
+/// más del perfil: es la herramienta de trabajo de quien lidera.
+class _LeaderMenuCard extends StatelessWidget {
+  final int cellCount;
+  final VoidCallback onTap;
+
+  const _LeaderMenuCard({required this.cellCount, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      color: AppColors.cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: AppColors.dorado.withValues(alpha: 0.35)),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.dorado.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.groups_rounded, color: AppColors.dorado, size: 23),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      cellCount > 1 ? 'Mis Células' : 'Mi Célula',
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.doradoClaro,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Miembros, reuniones, seguimientos, informes y avisos',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.crema.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.dorado, size: 22),
+            ],
+          ),
+        ),
       ),
     );
   }

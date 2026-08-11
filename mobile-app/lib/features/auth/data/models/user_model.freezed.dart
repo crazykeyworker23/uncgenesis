@@ -29,7 +29,15 @@ mixin _$UserModel {
   String? get location => throw _privateConstructorUsedError;
   String? get bio => throw _privateConstructorUsedError;
   String get status => throw _privateConstructorUsedError;
-  String? get avatar => throw _privateConstructorUsedError;
+  String? get avatar =>
+      throw _privateConstructorUsedError; // El servidor ya venía enviando estos tres campos en /auth/me/; la app
+  // simplemente los descartaba. Sin ellos no hay forma de saber que quien
+  // inició sesión lidera una célula, y la sección de líder no podía existir.
+  List<String> get roles => throw _privateConstructorUsedError;
+  List<String> get permissions => throw _privateConstructorUsedError;
+  @JsonKey(name: 'leads_cells')
+  int get leadsCells => throw _privateConstructorUsedError;
+  SessionScope get scope => throw _privateConstructorUsedError;
 
   /// Create a copy of UserModel
   /// with the given fields replaced by the non-null parameter values.
@@ -54,6 +62,10 @@ abstract class $UserModelCopyWith<$Res> {
     String? bio,
     String status,
     String? avatar,
+    List<String> roles,
+    List<String> permissions,
+    @JsonKey(name: 'leads_cells') int leadsCells,
+    SessionScope scope,
   });
 }
 
@@ -82,6 +94,10 @@ class _$UserModelCopyWithImpl<$Res, $Val extends UserModel>
     Object? bio = freezed,
     Object? status = null,
     Object? avatar = freezed,
+    Object? roles = null,
+    Object? permissions = null,
+    Object? leadsCells = null,
+    Object? scope = null,
   }) {
     return _then(
       _value.copyWith(
@@ -125,6 +141,22 @@ class _$UserModelCopyWithImpl<$Res, $Val extends UserModel>
                 ? _value.avatar
                 : avatar // ignore: cast_nullable_to_non_nullable
                       as String?,
+            roles: null == roles
+                ? _value.roles
+                : roles // ignore: cast_nullable_to_non_nullable
+                      as List<String>,
+            permissions: null == permissions
+                ? _value.permissions
+                : permissions // ignore: cast_nullable_to_non_nullable
+                      as List<String>,
+            leadsCells: null == leadsCells
+                ? _value.leadsCells
+                : leadsCells // ignore: cast_nullable_to_non_nullable
+                      as int,
+            scope: null == scope
+                ? _value.scope
+                : scope // ignore: cast_nullable_to_non_nullable
+                      as SessionScope,
           )
           as $Val,
     );
@@ -151,6 +183,10 @@ abstract class _$$UserModelImplCopyWith<$Res>
     String? bio,
     String status,
     String? avatar,
+    List<String> roles,
+    List<String> permissions,
+    @JsonKey(name: 'leads_cells') int leadsCells,
+    SessionScope scope,
   });
 }
 
@@ -178,6 +214,10 @@ class __$$UserModelImplCopyWithImpl<$Res>
     Object? bio = freezed,
     Object? status = null,
     Object? avatar = freezed,
+    Object? roles = null,
+    Object? permissions = null,
+    Object? leadsCells = null,
+    Object? scope = null,
   }) {
     return _then(
       _$UserModelImpl(
@@ -221,6 +261,22 @@ class __$$UserModelImplCopyWithImpl<$Res>
             ? _value.avatar
             : avatar // ignore: cast_nullable_to_non_nullable
                   as String?,
+        roles: null == roles
+            ? _value._roles
+            : roles // ignore: cast_nullable_to_non_nullable
+                  as List<String>,
+        permissions: null == permissions
+            ? _value._permissions
+            : permissions // ignore: cast_nullable_to_non_nullable
+                  as List<String>,
+        leadsCells: null == leadsCells
+            ? _value.leadsCells
+            : leadsCells // ignore: cast_nullable_to_non_nullable
+                  as int,
+        scope: null == scope
+            ? _value.scope
+            : scope // ignore: cast_nullable_to_non_nullable
+                  as SessionScope,
       ),
     );
   }
@@ -240,7 +296,13 @@ class _$UserModelImpl extends _UserModel {
     this.bio,
     required this.status,
     this.avatar,
-  }) : super._();
+    final List<String> roles = const <String>[],
+    final List<String> permissions = const <String>[],
+    @JsonKey(name: 'leads_cells') this.leadsCells = 0,
+    this.scope = const SessionScope(),
+  }) : _roles = roles,
+       _permissions = permissions,
+       super._();
 
   @override
   final int id;
@@ -265,10 +327,40 @@ class _$UserModelImpl extends _UserModel {
   final String status;
   @override
   final String? avatar;
+  // El servidor ya venía enviando estos tres campos en /auth/me/; la app
+  // simplemente los descartaba. Sin ellos no hay forma de saber que quien
+  // inició sesión lidera una célula, y la sección de líder no podía existir.
+  final List<String> _roles;
+  // El servidor ya venía enviando estos tres campos en /auth/me/; la app
+  // simplemente los descartaba. Sin ellos no hay forma de saber que quien
+  // inició sesión lidera una célula, y la sección de líder no podía existir.
+  @override
+  @JsonKey()
+  List<String> get roles {
+    if (_roles is EqualUnmodifiableListView) return _roles;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_roles);
+  }
+
+  final List<String> _permissions;
+  @override
+  @JsonKey()
+  List<String> get permissions {
+    if (_permissions is EqualUnmodifiableListView) return _permissions;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_permissions);
+  }
+
+  @override
+  @JsonKey(name: 'leads_cells')
+  final int leadsCells;
+  @override
+  @JsonKey()
+  final SessionScope scope;
 
   @override
   String toString() {
-    return 'UserModel(id: $id, email: $email, firstName: $firstName, lastName: $lastName, fullName: $fullName, phone: $phone, location: $location, bio: $bio, status: $status, avatar: $avatar)';
+    return 'UserModel(id: $id, email: $email, firstName: $firstName, lastName: $lastName, fullName: $fullName, phone: $phone, location: $location, bio: $bio, status: $status, avatar: $avatar, roles: $roles, permissions: $permissions, leadsCells: $leadsCells, scope: $scope)';
   }
 
   @override
@@ -289,7 +381,15 @@ class _$UserModelImpl extends _UserModel {
                 other.location == location) &&
             (identical(other.bio, bio) || other.bio == bio) &&
             (identical(other.status, status) || other.status == status) &&
-            (identical(other.avatar, avatar) || other.avatar == avatar));
+            (identical(other.avatar, avatar) || other.avatar == avatar) &&
+            const DeepCollectionEquality().equals(other._roles, _roles) &&
+            const DeepCollectionEquality().equals(
+              other._permissions,
+              _permissions,
+            ) &&
+            (identical(other.leadsCells, leadsCells) ||
+                other.leadsCells == leadsCells) &&
+            (identical(other.scope, scope) || other.scope == scope));
   }
 
   @override
@@ -305,6 +405,10 @@ class _$UserModelImpl extends _UserModel {
     bio,
     status,
     avatar,
+    const DeepCollectionEquality().hash(_roles),
+    const DeepCollectionEquality().hash(_permissions),
+    leadsCells,
+    scope,
   );
 
   /// Create a copy of UserModel
@@ -328,6 +432,10 @@ abstract class _UserModel extends UserModel {
     final String? bio,
     required final String status,
     final String? avatar,
+    final List<String> roles,
+    final List<String> permissions,
+    @JsonKey(name: 'leads_cells') final int leadsCells,
+    final SessionScope scope,
   }) = _$UserModelImpl;
   const _UserModel._() : super._();
 
@@ -353,7 +461,18 @@ abstract class _UserModel extends UserModel {
   @override
   String get status;
   @override
-  String? get avatar;
+  String? get avatar; // El servidor ya venía enviando estos tres campos en /auth/me/; la app
+  // simplemente los descartaba. Sin ellos no hay forma de saber que quien
+  // inició sesión lidera una célula, y la sección de líder no podía existir.
+  @override
+  List<String> get roles;
+  @override
+  List<String> get permissions;
+  @override
+  @JsonKey(name: 'leads_cells')
+  int get leadsCells;
+  @override
+  SessionScope get scope;
 
   /// Create a copy of UserModel
   /// with the given fields replaced by the non-null parameter values.

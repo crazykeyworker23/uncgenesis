@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/auth/presentation/providers/auth_provider.dart';
 import '../features/events/presentation/providers/events_provider.dart';
+import '../features/leader/presentation/providers/leader_providers.dart';
 import '../features/notifications/presentation/providers/notifications_provider.dart';
 import '../features/requests/presentation/providers/requests_provider.dart';
 
@@ -33,6 +34,21 @@ class SessionSync {
     _ref.invalidate(cellStatusProvider);
     _ref.read(eventsProvider.notifier).refresh();
     _ref.read(localNotificationsProvider.notifier).resetForSessionChange();
+    _refreshCellManagement();
+  }
+
+  /// La gestión de célula es lo más sensible a un cambio de sesión: son datos
+  /// de la gente de un grupo concreto. Se descarta todo, incluida la célula
+  /// que estuviera seleccionada, para que nada del líder anterior sobreviva.
+  void _refreshCellManagement() {
+    _ref.invalidate(myCellsProvider);
+    _ref.invalidate(cellStatisticsProvider);
+    _ref.invalidate(cellMembersProvider);
+    _ref.invalidate(cellMeetingProvider);
+    _ref.invalidate(cellMeetingsProvider);
+    _ref.invalidate(cellFollowUpsProvider);
+    _ref.invalidate(cellReportsProvider);
+    _ref.invalidate(selectedCellIdProvider);
   }
 }
 
