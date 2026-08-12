@@ -28,14 +28,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
       backgroundColor: AppColors.darkGreen,
       body: Stack(
         children: [
-          // Background Image (100% full screen background image)
-          const Positioned.fill(
-            child: AppBackground('assets/images/splash_bg.png'),
-          ),
-          // Subtle dark overlay to ensure readability
+          // Fondo y velo oscuro en una sola capa: sueltos, cada repintado del
+          // contenido obliga a volver a mezclar el velo a pantalla completa.
           Positioned.fill(
-            child: Container(
-              color: AppColors.darkGreen.withValues(alpha: 0.65),
+            child: AppBackground(
+              'assets/images/splash_bg.png',
+              overlay: AppColors.darkGreen.withValues(alpha: 0.65),
             ),
           ),
 

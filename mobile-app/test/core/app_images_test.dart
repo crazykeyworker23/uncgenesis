@@ -68,5 +68,44 @@ void main() {
         findsWidgets,
       );
     });
+
+    testWidgets('el velo oscuro viaja dentro de esa misma capa', (tester) async {
+      // Suelto, como widget hermano, comparte capa con el contenido de la
+      // pantalla: al abrir el teclado había que volver a mezclarlo a pantalla
+      // completa en cada fotograma de la animación.
+      const velo = Color(0x99032F2F);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: AppBackground('assets/images/splash_bg.png', overlay: velo),
+          ),
+        ),
+      );
+
+      final coloredBox = find.byWidgetPredicate(
+        (widget) => widget is ColoredBox && widget.color == velo,
+      );
+      expect(coloredBox, findsOneWidget);
+      expect(
+        find.ancestor(of: coloredBox, matching: find.byType(RepaintBoundary)),
+        findsWidgets,
+      );
+    });
+
+    testWidgets('sin velo no se pinta una capa de más', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: AppBackground('assets/images/splash_bg.png')),
+        ),
+      );
+
+      // El Scaffold pinta su propio color de fondo, así que se mira sólo
+      // dentro del widget.
+      expect(
+        find.descendant(of: find.byType(AppBackground), matching: find.byType(ColoredBox)),
+        findsNothing,
+      );
+    });
   });
 }

@@ -26,24 +26,44 @@ class AppBackground extends StatelessWidget {
   final String asset;
   final Alignment alignment;
 
-  const AppBackground(this.asset, {super.key, this.alignment = Alignment.center});
+  /// Velo que oscurece la foto para que el texto se lea encima.
+  ///
+  /// Se pinta aquí dentro, y no como un widget hermano, para que forme parte
+  /// de la misma capa que la imagen. Suelto, comparte capa con el contenido de
+  /// la pantalla: al abrir el teclado había que volver a mezclar el velo a
+  /// pantalla completa en cada fotograma de la animación.
+  final Color? overlay;
+
+  const AppBackground(
+    this.asset, {
+    super.key,
+    this.alignment = Alignment.center,
+    this.overlay,
+  });
 
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
 
     return RepaintBoundary(
-      child: Image.asset(
-        asset,
-        fit: BoxFit.cover,
-        alignment: alignment,
-        width: double.infinity,
-        height: double.infinity,
-        // Se decodifica al ancho real de la pantalla. En un teléfono de 720
-        // puntos de ancho son 4,5 MB en vez de 10.
-        cacheWidth: (media.size.width * media.devicePixelRatio).round(),
-        // El fondo es decorativo: si faltara, basta el color de la pantalla.
-        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            asset,
+            fit: BoxFit.cover,
+            alignment: alignment,
+            width: double.infinity,
+            height: double.infinity,
+            // Se decodifica al ancho real de la pantalla. En un teléfono de
+            // 720 puntos de ancho son 4,5 MB en vez de 10.
+            cacheWidth: (media.size.width * media.devicePixelRatio).round(),
+            // El fondo es decorativo: si faltara, basta el color de la
+            // pantalla que hay debajo.
+            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          ),
+          if (overlay != null) ColoredBox(color: overlay!),
+        ],
       ),
     );
   }
