@@ -110,18 +110,64 @@ class TestSuperadminAccess:
 
 @pytest.mark.django_db
 class TestRoleScopedAccess:
-    def test_cell_leader_enters_panel_with_limited_scope(self, user_with_role):
-        """El lider de celula entra al panel, pero con su propio alcance."""
+    def test_cell_leader_works_from_the_app_not_the_panel(self, user_with_role):
+        """
+        El lider de celula no entra al panel: su sitio es la aplicacion movil.
+
+        Conserva los permisos que necesita para gestionar su grupo —y los
+        ejerce desde la app, que es donde tiene su seccion—, pero el panel
+        completo de la iglesia no le corresponde.
+        """
         leader = user_with_role('lider2@genesisapp.org', RoleType.CELL_LEADER)
 
-        assert can_access_admin_panel(leader)
+        assert not can_access_admin_panel(leader)
         assert not is_superadmin(leader)
 
         permissions = get_user_permissions(leader)
         assert 'CELLS_VIEW' in permissions
+        assert 'MEETINGS_CREATE' in permissions
         # No administra cuentas ni roles del sistema
         assert 'USERS_EDIT' not in permissions
         assert 'ROLES_EDIT' not in permissions
+
+    def test_coordinator_also_works_from_the_app(self, user_with_role):
+        """El coordinador supervisa sus celulas desde la app, no desde el panel."""
+        coordinator = user_with_role('coord@genesisapp.org', RoleType.COORDINATOR)
+
+        assert not can_access_admin_panel(coordinator)
+
+    def test_pastor_and_office_roles_keep_the_panel(self, user_with_role):
+        """
+        Quien administra la iglesia o produce contenido si entra.
+
+        El editor y el consejero se quedan porque su trabajo no existe en
+        ningun otro sitio: sin panel, nadie publicaria un devocional ni
+        atenderia una peticion de oracion.
+        """
+        for email, role in [
+            ('pastor@genesisapp.org', RoleType.ADMIN),
+            ('editora@genesisapp.org', RoleType.CONTENT_EDITOR),
+            ('consejero@genesisapp.org', RoleType.SUPPORT),
+        ]:
+            assert can_access_admin_panel(user_with_role(email, role)), role
+
+    def test_leading_a_cell_does_not_reopen_the_panel(self, user_with_role):
+        """
+        Ni el rol ni la responsabilidad sobre un grupo abren el panel.
+
+        Antes bastaba con tener cualquier permiso del catalogo, y el lider los
+        tiene: la puerta se le abria sola.
+        """
+        editor_and_leader = user_with_role('mixta@genesisapp.org', RoleType.CELL_LEADER)
+        assert not can_access_admin_panel(editor_and_leader)
+
+        # Acumular el rol de editor si le da acceso, por el editor, no por el
+        # liderazgo.
+        from apps.roles.models import Role, UserRole
+
+        role, _ = Role.objects.get_or_create(name=RoleType.CONTENT_EDITOR)
+        UserRole.objects.get_or_create(user=editor_and_leader, role=role)
+        assert can_access_admin_panel(editor_and_leader)
 
     def test_cell_leader_cannot_manage_users(self, user_with_role):
         leader = user_with_role('lider3@genesisapp.org', RoleType.CELL_LEADER)

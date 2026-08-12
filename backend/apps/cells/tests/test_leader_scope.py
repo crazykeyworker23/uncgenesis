@@ -244,16 +244,25 @@ class TestLeaderReminders:
 
 @pytest.mark.django_db
 class TestLeaderPanelAccess:
-    def test_leading_a_cell_grants_panel_access(self, make_user, make_cell):
-        """Tener una célula a cargo basta para entrar al panel."""
+    def test_leading_a_cell_does_not_grant_panel_access(self, make_user, make_cell):
+        """
+        Tener una célula a cargo no abre el panel: abre la sección de la app.
+
+        Antes sí lo abría, y el líder acababa dentro del panel de toda la
+        iglesia cuando lo suyo es su grupo.
+        """
         plain = make_user('sin_permisos@genesisapp.org')
         assert not can_access_admin_panel(plain)
 
         make_cell('Célula Asignada', leader=plain)
         plain.refresh_from_db()
-        assert can_access_admin_panel(plain)
+        assert not can_access_admin_panel(plain)
 
     def test_me_reports_led_cells(self, make_user, make_cell):
+        """
+        El perfil dice cuántas células tiene a cargo, que es lo que habilita
+        la sección de gestión en la aplicación móvil.
+        """
         leader = make_user('lider10@genesisapp.org', RoleType.CELL_LEADER)
         make_cell('Célula A', leader=leader)
         make_cell('Célula B', leader=leader)
@@ -261,5 +270,9 @@ class TestLeaderPanelAccess:
         res = _client_for(leader).get(reverse('auth_me'))
         assert res.status_code == status.HTTP_200_OK
         assert res.data['leads_cells'] == 2
-        assert res.data['can_access_admin'] is True
         assert res.data['is_superadmin'] is False
+        # La gestión de sus células la hace desde la app, no desde el panel.
+        assert res.data['can_access_admin'] is False
+        assert sorted(res.data['scope']['leads_cell_ids']) == sorted(
+            res.data['scope']['cell_ids']
+        )

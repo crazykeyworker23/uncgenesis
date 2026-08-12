@@ -41,11 +41,12 @@ export const Login: React.FC = () => {
         throw new Error('Tu cuenta no se encuentra activa.');
       }
 
-      // El panel es sólo para quien gestiona algo. Los miembros de la comunidad
-      // tienen credenciales válidas, pero su lugar es la app móvil.
+      // El panel es del pastorado y de quien produce contenido o atiende
+      // solicitudes. El resto —miembros, y también líderes y coordinadores—
+      // tiene credenciales válidas, pero su lugar es la app móvil.
       if (!user.can_access_admin) {
         throw new Error(
-          'Esta cuenta es de miembro de la comunidad y no tiene acceso al panel administrativo. Ingresa desde la aplicación móvil Génesis.'
+          'Esta cuenta no tiene acceso al panel administrativo. Ingresa desde la aplicación móvil Génesis.'
         );
       }
 
@@ -71,7 +72,7 @@ export const Login: React.FC = () => {
 
       if (!user.can_access_admin) {
         throw new Error(
-          'Esta cuenta es de miembro de la comunidad y no tiene acceso al panel administrativo. Ingresa desde la aplicación móvil Génesis.'
+          'Esta cuenta no tiene acceso al panel administrativo. Ingresa desde la aplicación móvil Génesis.'
         );
       }
 
