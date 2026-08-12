@@ -64,6 +64,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     final isLoading = state.maybeWhen(loading: () => true, orElse: () => false);
 
+    // Alto útil de la pantalla, descontando barra de estado y de navegación y
+    // el margen del formulario.
+    //
+    // Se saca de `size`, que no cambia al abrir el teclado. Medir contra el
+    // hueco que queda libre es justo lo que hacía saltar el formulario.
+    final media = MediaQuery.of(context);
+    final availableHeight = media.size.height - media.padding.vertical - 32.0;
+
     // El fondo se queda quieto: vive fuera del `Scaffold` y en su propia capa.
     //
     // Al tocar un campo se abre el teclado y el cuerpo del Scaffold se encoge
@@ -83,13 +91,35 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         RepaintBoundary(
           child: Scaffold(
             backgroundColor: Colors.transparent,
+            // El cuerpo NO se encoge al abrir el teclado.
+            //
+            // Con el comportamiento normal, el hueco se reduce y el `Center`
+            // recoloca el formulario entero: eso es el salto hacia arriba que
+            // se ve al tocar un campo, y obliga a rehacer la disposición en
+            // cada fotograma de la animación. Fijando el alto, el formulario
+            // se queda exactamente donde estaba.
+            resizeToAvoidBottomInset: false,
             body: Stack(
               children: [
                 // Content
                 SafeArea(
-                  child: Center(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                  child: SingleChildScrollView(
+                    // Se puede arrastrar aunque el contenido quepa: es lo que
+                    // permite alcanzar lo último cuando el teclado tapa el pie.
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.only(
+                      left: 24.0,
+                      right: 24.0,
+                      top: 16.0,
+                      // Hueco por debajo, del alto del teclado, para poder
+                      // desplazarse hasta lo que quede tapado. Va aquí abajo,
+                      // así que no mueve nada de lo que ya está en pantalla.
+                      bottom: 16.0 + MediaQuery.viewInsetsOf(context).bottom,
+                    ),
+                    child: ConstrainedBox(
+                      // Se centra contra el alto de la pantalla, que no cambia,
+                      // y no contra el hueco que deja el teclado.
+                      constraints: BoxConstraints(minHeight: availableHeight),
                       child: Form(
                         key: _formKey,
                         child: Column(
