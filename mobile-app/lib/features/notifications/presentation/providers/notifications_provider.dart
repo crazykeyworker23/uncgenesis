@@ -16,12 +16,20 @@ class LocalNotification {
   final String receivedAt;
   final bool isRead;
 
+  /// `true` cuando el aviso lo escribió la propia persona que lo está viendo.
+  ///
+  /// El líder manda recordatorios a su célula y no los recibe en el teléfono,
+  /// pero en el listado siguen apareciendo como constancia de lo que envió.
+  /// Sin distinguirlos parecerían un aviso entrante de otra persona.
+  final bool sentByMe;
+
   LocalNotification({
     required this.id,
     required this.title,
     required this.body,
     required this.receivedAt,
     this.isRead = false,
+    this.sentByMe = false,
   });
 
   LocalNotification copyWith({
@@ -30,6 +38,7 @@ class LocalNotification {
     String? body,
     String? receivedAt,
     bool? isRead,
+    bool? sentByMe,
   }) {
     return LocalNotification(
       id: id ?? this.id,
@@ -37,6 +46,7 @@ class LocalNotification {
       body: body ?? this.body,
       receivedAt: receivedAt ?? this.receivedAt,
       isRead: isRead ?? this.isRead,
+      sentByMe: sentByMe ?? this.sentByMe,
     );
   }
 
@@ -46,6 +56,7 @@ class LocalNotification {
         'body': body,
         'receivedAt': receivedAt,
         'isRead': isRead,
+        'sentByMe': sentByMe,
       };
 
   factory LocalNotification.fromJson(Map<String, dynamic> json) => LocalNotification(
@@ -54,6 +65,7 @@ class LocalNotification {
         body: json['body'],
         receivedAt: json['receivedAt'],
         isRead: json['isRead'] ?? false,
+        sentByMe: json['sentByMe'] ?? false,
       );
 }
 
@@ -87,7 +99,7 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
   }
 
   /// Cantidad de notificaciones sin leer (usada por el badge del inicio).
-  int get unreadCount => state.where((n) => !n.isRead).length;
+  int get unreadCount => state.where((n) => !n.isRead && !n.sentByMe).length;
 
   /// Al iniciar o cerrar sesión el historial deja de ser válido: se limpia la
   /// caché de identidad y se vuelve a consultar de inmediato.
@@ -194,16 +206,27 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
           final title = item['title'] ?? 'Notificación Génesis';
           final body = item['body'] ?? '';
           final created = item['created_at'] ?? DateTime.now().toIso8601String();
-          
+
+          final sender = item['sender'];
+          final senderId = sender is Map ? sender['id']?.toString() : null;
+          final sentByMe =
+              senderId != null && currentUserId != null && senderId == currentUserId;
+
           final notif = LocalNotification(
             id: id,
             title: title,
             body: body,
             receivedAt: created,
             isRead: readIds.contains(id),
+            sentByMe: sentByMe,
           );
 
-          if (!existingIds.contains(id)) {
+          // Lo propio no vuelve a sonar. El servidor ya no le manda al autor
+          // su propio aviso al teléfono, pero esta sincronización lo ve
+          // aparecer en el listado y, sin esta condición, dispararía aquí
+          // mismo la alerta del sistema: el líder recibiría igualmente el
+          // mensaje que acaba de escribir, sólo que emitido por su propia app.
+          if (!existingIds.contains(id) && !sentByMe) {
             hasNew = true;
             newestNotification ??= notif;
           }
@@ -288,4 +311,17 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
 
 final localNotificationsProvider = StateNotifierProvider<LocalNotificationsNotifier, List<LocalNotification>>((ref) {
   return LocalNotificationsNotifier();
+});
+
+/// Avisos que quedan por leer, para la señal roja sobre la campana.
+///
+/// Lo que uno mismo envió no cuenta: no es algo que tenga que leer, sino la
+/// constancia de lo que mandó. Antes cada pantalla se lo calculaba por su
+/// cuenta con la misma expresión repetida, y bastaba corregir una para que
+/// las demás siguieran contando distinto.
+final unreadNotificationsCountProvider = Provider<int>((ref) {
+  return ref
+      .watch(localNotificationsProvider)
+      .where((notification) => !notification.isRead && !notification.sentByMe)
+      .length;
 });

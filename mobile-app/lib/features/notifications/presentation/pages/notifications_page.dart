@@ -136,6 +136,12 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
 
                 final isRead = notif.isRead;
 
+                // Lo que uno mismo mandó no es un aviso entrante: aparece como
+                // constancia de lo enviado y se distingue a simple vista, para
+                // que el líder no lo confunda con un mensaje de otra persona.
+                final sentByMe = notif.sentByMe;
+                const sentTone = Color(0xFF34D399);
+
                 return Dismissible(
                   key: Key(notif.id),
                   direction: DismissDirection.endToStart,
@@ -235,8 +241,14 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                                       ],
                                     ),
                                     child: Icon(
-                                      isRead ? Icons.mark_email_read_outlined : Icons.notifications_active_rounded,
-                                      color: isRead ? Colors.white54 : const Color(0xFF0F172A),
+                                      sentByMe
+                                          ? Icons.send_rounded
+                                          : isRead
+                                              ? Icons.mark_email_read_outlined
+                                              : Icons.notifications_active_rounded,
+                                      color: isRead && !sentByMe
+                                          ? Colors.white54
+                                          : const Color(0xFF0F172A),
                                       size: 20,
                                     ),
                                   ),
@@ -253,21 +265,32 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                                               width: 6,
                                               height: 6,
                                               decoration: BoxDecoration(
-                                                color: isRead ? Colors.white38 : const Color(0xFFF59E0B),
+                                                color: sentByMe
+                                                    ? sentTone
+                                                    : isRead
+                                                        ? Colors.white38
+                                                        : const Color(0xFFF59E0B),
                                                 shape: BoxShape.circle,
                                               ),
                                             ),
                                             const SizedBox(width: 6),
                                             Text(
-                                              'GÉNESIS APP',
+                                              sentByMe ? 'ENVIADO POR TI' : 'GÉNESIS APP',
                                               style: TextStyle(
-                                                color: isRead ? Colors.white38 : const Color(0xFFF59E0B),
+                                                color: sentByMe
+                                                    ? sentTone
+                                                    : isRead
+                                                        ? Colors.white38
+                                                        : const Color(0xFFF59E0B),
                                                 fontSize: 10.5,
                                                 fontWeight: FontWeight.w800,
                                                 letterSpacing: 1.1,
                                               ),
                                             ),
-                                            if (!isRead) ...[
+                                            // «NUEVO» sólo tiene sentido en lo
+                                            // que llega de fuera: lo propio ya
+                                            // se sabe.
+                                            if (!isRead && !sentByMe) ...[
                                               const SizedBox(width: 8),
                                               Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),

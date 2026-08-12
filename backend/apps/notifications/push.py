@@ -14,6 +14,7 @@ import logging
 
 import firebase_admin
 from django.conf import settings
+from django.db.models import Q
 from firebase_admin import credentials, exceptions, messaging
 
 from apps.roles.models import RoleType
@@ -52,12 +53,33 @@ def get_firebase_app():
         return None
 
 
+def _excluding_sender(devices, notification):
+    """
+    Aparta del reparto los dispositivos de quien firma el aviso.
+
+    A nadie le informa recibir en su propio teléfono el mensaje que acaba de
+    escribir: es ruido, y encima hace dudar de si salió de verdad o se quedó
+    dando vueltas. El líder escribe para su célula; el pastor, para la iglesia.
+
+    Los dispositivos sin cuenta —modo invitado— se conservan siempre. Hay que
+    decirlo con `user__isnull`, porque en SQL comparar un nulo no da ni
+    verdadero ni falso, y un `exclude` a secas se los llevaría por delante.
+    """
+    if not notification.sender_id:
+        return devices
+
+    return devices.filter(
+        Q(user__isnull=True) | ~Q(user_id=notification.sender_id)
+    )
+
+
 def resolve_target_tokens(notification):
     """
     Tokens de los dispositivos que deben recibir esta notificación.
 
-    Sigue las mismas reglas que el feed dentro de la app, para que lo que llega
-    al teléfono y lo que se ve en el listado coincidan.
+    Sigue las reglas del feed dentro de la app, con una diferencia buscada:
+    quien envía no se recibe a sí mismo. En el listado su aviso sí aparece,
+    como constancia de lo que mandó, pero el teléfono no le suena.
     """
     from django.contrib.auth import get_user_model
 
@@ -67,6 +89,9 @@ def resolve_target_tokens(notification):
     audience = notification.target_audience
 
     # 1. Aviso dirigido a una persona concreta.
+    #
+    # Aquí no se aparta a nadie: si alguien se escribe a sí mismo, es lo que
+    # ha pedido expresamente.
     if notification.target_user_id:
         return list(
             FCMDevice.objects.filter(user_id=notification.target_user_id)
@@ -75,11 +100,17 @@ def resolve_target_tokens(notification):
         )
 
     # 2. Recordatorio de una célula: sus miembros y quien la lidera.
+    #
+    # El líder sigue en la lista, y es a propósito: cuando el recordatorio lo
+    # manda su coordinador o el pastorado, tiene que enterarse como el que
+    # más. Lo que no ocurre es que se lo mande él y le vuelva.
     if audience == TargetAudience.CELL and notification.target_cell_id:
         recipients = User.objects.filter(assigned_cell_id=notification.target_cell_id) | \
             User.objects.filter(led_cells__id=notification.target_cell_id)
         return list(
-            FCMDevice.objects.filter(user__in=recipients.distinct())
+            _excluding_sender(
+                FCMDevice.objects.filter(user__in=recipients.distinct()), notification
+            )
             .values_list('token', flat=True)
             .distinct()
         )
@@ -87,7 +118,11 @@ def resolve_target_tokens(notification):
     # 3. Audiencias masivas.
     if audience == TargetAudience.ALL:
         # Incluye los dispositivos sin cuenta asociada (modo invitado).
-        return list(FCMDevice.objects.values_list('token', flat=True).distinct())
+        return list(
+            _excluding_sender(FCMDevice.objects.all(), notification)
+            .values_list('token', flat=True)
+            .distinct()
+        )
 
     role_by_audience = {
         TargetAudience.LEADERS: RoleType.CELL_LEADER,
@@ -96,7 +131,9 @@ def resolve_target_tokens(notification):
     role = role_by_audience.get(audience)
     if role:
         return list(
-            FCMDevice.objects.filter(user__user_roles__role__name=role)
+            _excluding_sender(
+                FCMDevice.objects.filter(user__user_roles__role__name=role), notification
+            )
             .values_list('token', flat=True)
             .distinct()
         )

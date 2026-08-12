@@ -288,6 +288,123 @@ class TestEnvioReal:
 
 
 @pytest.mark.django_db
+class TestQuienEnviaNoSeRecibe:
+    """
+    El aviso sale para los demás, no para quien lo escribe.
+
+    Recibir en el propio teléfono el mensaje que uno acaba de mandar no informa
+    de nada, y encima hace dudar de si salió de verdad o volvió por un fallo.
+    """
+
+    @pytest.fixture
+    def celula_con_lider(self, con_dispositivo):
+        def _make():
+            lider = con_dispositivo('lider.envia@push.org', RoleType.CELL_LEADER)
+            celula = CellGroup.objects.create(
+                name='Norte', leader=lider,
+                meeting_day=MeetingDay.MONDAY, meeting_time='19:00', address='x',
+            )
+            miembro = con_dispositivo('miembro.recibe@push.org', RoleType.MEMBER)
+            miembro.assigned_cell = celula
+            miembro.save()
+            return lider, celula, miembro
+        return _make
+
+    def test_el_lider_no_recibe_el_recordatorio_que_el_mismo_manda(self, celula_con_lider):
+        lider, celula, _ = celula_con_lider()
+
+        aviso = Notification.objects.create(
+            title='Nos vemos el jueves', body='x',
+            target_audience=TargetAudience.CELL,
+            target_cell=celula,
+            sender=lider,
+        )
+
+        assert resolve_target_tokens(aviso) == ['token-miembro.recibe@push.org']
+
+    def test_el_lider_si_lo_recibe_cuando_se_lo_manda_su_coordinador(
+        self, celula_con_lider, con_dispositivo
+    ):
+        """Del recordatorio de arriba tiene que enterarse como el que más."""
+        lider, celula, _ = celula_con_lider()
+        coordinador = con_dispositivo('coord.envia@push.org', RoleType.COORDINATOR)
+
+        aviso = Notification.objects.create(
+            title='Aviso de tu coordinador', body='x',
+            target_audience=TargetAudience.CELL,
+            target_cell=celula,
+            sender=coordinador,
+        )
+
+        tokens = resolve_target_tokens(aviso)
+        assert 'token-lider.envia@push.org' in tokens
+        assert 'token-miembro.recibe@push.org' in tokens
+        # Y el coordinador tampoco se recibe a sí mismo.
+        assert 'token-coord.envia@push.org' not in tokens
+
+    def test_el_pastor_no_recibe_su_propia_difusion(self, con_dispositivo):
+        pastor = con_dispositivo('pastor@push.org', RoleType.ADMIN)
+        con_dispositivo('feligres@push.org', RoleType.MEMBER)
+
+        aviso = Notification.objects.create(
+            title='Culto del domingo', body='x',
+            target_audience=TargetAudience.ALL,
+            sender=pastor,
+        )
+
+        tokens = resolve_target_tokens(aviso)
+        assert 'token-feligres@push.org' in tokens
+        assert 'token-pastor@push.org' not in tokens
+
+    def test_el_invitado_sigue_recibiendo_la_difusion(self, con_dispositivo, db):
+        """
+        Apartar a quien envía no puede llevarse por delante a los invitados.
+
+        Sus dispositivos no tienen cuenta asociada, y en SQL comparar un nulo
+        no da ni verdadero ni falso: un `exclude` a secas los habría descartado
+        en silencio, dejando sin avisos a toda la gente que usa la app sin
+        registrarse.
+        """
+        pastor = con_dispositivo('pastor2@push.org', RoleType.ADMIN)
+        FCMDevice.objects.create(token='token-invitado', device_type='ANDROID')
+
+        aviso = Notification.objects.create(
+            title='Abierto a todos', body='x',
+            target_audience=TargetAudience.ALL,
+            sender=pastor,
+        )
+
+        tokens = resolve_target_tokens(aviso)
+        assert 'token-invitado' in tokens
+        assert 'token-pastor2@push.org' not in tokens
+
+    def test_un_aviso_sin_remitente_llega_a_todos(self, con_dispositivo):
+        """El remitente puede haberse dado de baja; el aviso sigue saliendo."""
+        con_dispositivo('alguien@push.org', RoleType.MEMBER)
+
+        aviso = Notification.objects.create(
+            title='Automático', body='x',
+            target_audience=TargetAudience.ALL,
+            sender=None,
+        )
+
+        assert 'token-alguien@push.org' in resolve_target_tokens(aviso)
+
+    def test_escribirse_a_uno_mismo_si_llega(self, con_dispositivo):
+        """Dirigir un aviso a una persona concreta es una decisión expresa."""
+        alguien = con_dispositivo('yo@push.org', RoleType.MEMBER)
+
+        aviso = Notification.objects.create(
+            title='Nota para mí', body='x',
+            target_audience=TargetAudience.USER,
+            target_user=alguien,
+            sender=alguien,
+        )
+
+        assert resolve_target_tokens(aviso) == ['token-yo@push.org']
+
+
+@pytest.mark.django_db
 class TestAvisosProgramados:
     """
     La ronda de repesca recoge lo que quedó pendiente, sin repetir envíos.
