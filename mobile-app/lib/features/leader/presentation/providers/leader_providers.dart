@@ -63,12 +63,22 @@ final cellScopeProvider = Provider<SessionScope>((ref) {
   return ref.watch(myCellsProvider).valueOrNull?.scope ?? const SessionScope();
 });
 
-/// `true` cuando la sesión tiene alguna célula a su cargo.
+/// `true` cuando la sesión puede entrar a la sección de gestión de célula.
 ///
 /// Pertenecer a una célula no cuenta: un miembro corriente aparece en el
 /// alcance de su grupo y no debe ver la gestión.
 final leadsAnyCellProvider = Provider<bool>((ref) {
   return ref.watch(authProvider).user?.leadsAnyCell ?? false;
+});
+
+/// `true` cuando la aplicación debe ordenarse alrededor de la célula.
+///
+/// Es más estrecho que [leadsAnyCellProvider]: reordenar la navegación se
+/// reserva a quien responde de un grupo concreto. El pastorado alcanza todas
+/// las células, pero en el teléfono es un miembro más de la iglesia y su
+/// herramienta de administración es el panel.
+final worksAsCellLeaderProvider = Provider<bool>((ref) {
+  return ref.watch(authProvider).user?.scope.hasOwnCells ?? false;
 });
 
 /// `true` si se puede registrar y modificar en la célula activa.

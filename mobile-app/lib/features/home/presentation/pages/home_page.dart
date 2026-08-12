@@ -9,6 +9,8 @@ import '../providers/home_provider.dart';
 
 import '../../../../core/providers/core_providers.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../leader/presentation/pages/leader_dashboard_page.dart';
+import '../../../leader/presentation/providers/leader_providers.dart';
 import '../../../notifications/presentation/providers/notifications_provider.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -35,6 +37,14 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // Quien responde de una célula abre la aplicación con otra pregunta en la
+    // cabeza —qué me falta hacer con mi gente— y tiene su propio inicio. El
+    // arranque de notificaciones vive en `initState`, así que corre igual para
+    // los dos.
+    if (ref.watch(worksAsCellLeaderProvider)) {
+      return const LeaderDashboardPage();
+    }
+
     final settingsAsync = ref.watch(publicSettingsProvider);
     final authState = ref.watch(authProvider);
     final unreadCount = ref.watch(localNotificationsProvider).where((n) => !n.isRead).length;
@@ -236,14 +246,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ),
                     ),
                     const SizedBox(height: 40),
-
-                    // Atajo a la gestión de célula. Sólo lo ve quien tiene una
-                    // a su cargo, y va antes que los accesos generales: es su
-                    // herramienta de trabajo, no una sección más para ojear.
-                    if (ref.watch(authProvider).user?.leadsAnyCell ?? false) ...[
-                      _LeaderShortcut(onTap: () => context.push('/leader')),
-                      const SizedBox(height: 24),
-                    ],
 
                     // Grid of 6 quick access buttons (3x2)
                     GridView.count(
@@ -484,60 +486,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 ///
 /// En modo invitado invita a iniciar sesión (sin bloquear el contenido) y con
 /// sesión iniciada saluda a la persona por su nombre.
-/// Acceso directo del líder a su célula desde la pantalla de inicio.
-class _LeaderShortcut extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _LeaderShortcut({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-          decoration: BoxDecoration(
-            color: AppColors.dorado.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.dorado.withValues(alpha: 0.35)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.groups_rounded, color: AppColors.dorado, size: 26),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Mi Célula',
-                      style: AppTextStyles.titleMedium.copyWith(
-                        color: AppColors.doradoClaro,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Reuniones, asistencia, informes y avisos',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: AppColors.crema.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: AppColors.dorado, size: 22),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _SessionBanner extends StatelessWidget {
   final AuthState authState;
 

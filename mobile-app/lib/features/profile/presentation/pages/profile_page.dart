@@ -114,15 +114,14 @@ class ProfilePage extends ConsumerWidget {
                 const SizedBox(height: 24),
               ],
 
-              // 3. Gestión de célula, para quien tiene una a su cargo.
+              // 3. Gestión de célula para el pastorado.
               //
-              // No se muestra por pertenecer a una célula, sino por liderarla o
-              // supervisarla: el alcance viene resuelto desde /auth/me/.
-              if (user.leadsAnyCell) ...[
-                _LeaderMenuCard(
-                  cellCount: user.leadsCells,
-                  onTap: () => context.push('/leader'),
-                ),
+              // El líder y el coordinador no la ven aquí: tienen su propia
+              // pestaña en la barra inferior y repetirla sería ruido. Queda
+              // para quien alcanza las células por su cargo en la iglesia y no
+              // responde de ninguna en concreto, que sí necesita una puerta.
+              if (user.leadsAnyCell && !user.scope.hasOwnCells) ...[
+                _LeaderMenuCard(onTap: () => context.push('/leader')),
                 const SizedBox(height: 20),
               ],
 
@@ -269,15 +268,14 @@ class _ProfileInfoRow extends StatelessWidget {
   }
 }
 
-/// Acceso destacado a la gestión de célula.
+/// Acceso a la gestión de células para el pastorado.
 ///
-/// Va aparte del resto del menú y con más peso visual porque no es una opción
-/// más del perfil: es la herramienta de trabajo de quien lidera.
+/// Quien lidera o coordina un grupo llega por su pestaña; esta tarjeta es la
+/// puerta de quien alcanza las células por su cargo en la iglesia.
 class _LeaderMenuCard extends StatelessWidget {
-  final int cellCount;
   final VoidCallback onTap;
 
-  const _LeaderMenuCard({required this.cellCount, required this.onTap});
+  const _LeaderMenuCard({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -309,7 +307,7 @@ class _LeaderMenuCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      cellCount > 1 ? 'Mis Células' : 'Mi Célula',
+                      'Células de la iglesia',
                       style: AppTextStyles.titleMedium.copyWith(
                         color: AppColors.doradoClaro,
                         fontSize: 16,

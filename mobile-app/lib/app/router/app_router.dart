@@ -111,6 +111,15 @@ final GoRouter appRouter = GoRouter(
             return const ConnectPage();
           },
         ),
+        // Pestaña de quien responde de una célula. Va dentro del armazón para
+        // que conserve la barra inferior: es una sección de la aplicación, no
+        // una pantalla que se abre encima y de la que hay que volver.
+        GoRoute(
+          path: '/leader',
+          builder: (BuildContext context, GoRouterState state) {
+            return const LeaderHomePage();
+          },
+        ),
         GoRoute(
           path: '/profile',
           builder: (BuildContext context, GoRouterState state) {
@@ -260,17 +269,13 @@ final GoRouter appRouter = GoRouter(
     ),
 
     // ── Gestión de célula ───────────────────────────────────────────────────
-    // Sólo la alcanza quien tiene células a su cargo: la entrada aparece en el
-    // perfil según el alcance que devuelve /auth/me/, y cada pantalla vuelve a
-    // comprobarlo. Aun así, el servidor rechaza cualquier operación fuera de
-    // alcance: escribir la ruta a mano no da acceso a nada.
-    GoRoute(
-      parentNavigatorKey: rootNavigatorKey,
-      path: '/leader',
-      builder: (BuildContext context, GoRouterState state) {
-        return const LeaderHomePage();
-      },
-    ),
+    // El índice de la sección («/leader») es una pestaña y vive en el armazón,
+    // más arriba. Estas pantallas se abren encima, a pantalla completa, porque
+    // son tareas concretas de las que se vuelve.
+    //
+    // Sólo las alcanza quien tiene células a su cargo, y cada una lo vuelve a
+    // comprobar. Aun así, el servidor rechaza toda operación fuera de alcance:
+    // escribir la ruta a mano no da acceso a nada.
     GoRoute(
       parentNavigatorKey: rootNavigatorKey,
       path: '/leader/members',

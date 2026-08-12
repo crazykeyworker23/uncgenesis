@@ -43,6 +43,36 @@ void main() {
     });
   });
 
+  group('Responsabilidad propia sobre un grupo', () {
+    // Decide cómo se ordena la aplicación: la barra inferior y el inicio
+    // cambian para quien responde de una célula concreta, no para quien las
+    // alcanza todas por su cargo.
+
+    test('el líder responde de su célula', () {
+      const scope = SessionScope(cellIds: [7], ledCellIds: [7]);
+      expect(scope.hasOwnCells, isTrue);
+    });
+
+    test('el coordinador responde de las que supervisa', () {
+      const scope = SessionScope(cellIds: [3, 4], coordinatedCellIds: [3, 4]);
+      expect(scope.hasOwnCells, isTrue);
+    });
+
+    test('el pastorado no: en el teléfono es un miembro más', () {
+      // Alcanza todas las células, pero su herramienta de administración es el
+      // panel. Reordenarle la app no le ayudaría en nada.
+      const scope = SessionScope(level: 'CHURCH', churchWide: true);
+
+      expect(scope.managesAnyCell, isTrue);
+      expect(scope.hasOwnCells, isFalse);
+    });
+
+    test('el miembro tampoco, aunque pertenezca a una célula', () {
+      const scope = SessionScope(level: 'SELF', cellIds: [7]);
+      expect(scope.hasOwnCells, isFalse);
+    });
+  });
+
   group('Perfil de la sesión', () {
     test('lee roles, permisos y alcance de /auth/me/', () {
       final user = UserModel.fromJson({

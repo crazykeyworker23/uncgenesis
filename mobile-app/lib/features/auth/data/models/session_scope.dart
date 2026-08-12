@@ -57,6 +57,15 @@ class SessionScope {
   bool get managesAnyCell =>
       churchWide || ledCellIds.isNotEmpty || coordinatedCellIds.isNotEmpty;
 
+  /// `true` para quien lidera o coordina células concretas.
+  ///
+  /// No es lo mismo que [managesAnyCell]. El pastorado alcanza todas las
+  /// células por su cargo, pero su herramienta es el panel y en la aplicación
+  /// es un miembro más de la iglesia: cambiarle la navegación no le ayudaría.
+  /// El líder y el coordinador sí tienen un grupo concreto del que responder,
+  /// y la aplicación se ordena alrededor de eso.
+  bool get hasOwnCells => ledCellIds.isNotEmpty || coordinatedCellIds.isNotEmpty;
+
   /// `true` si puede registrar y modificar datos de esa célula.
   ///
   /// Reproduce la misma regla que aplica el servidor en `can_manage_cell`. Aquí

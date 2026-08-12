@@ -378,18 +378,67 @@ void main() {
       expect(find.text('ENVIAR AHORA'), findsOneWidget);
     });
 
-    testWidgets('el perfil de un líder ofrece la gestión de su célula', (tester) async {
+    testWidgets('el perfil no repite la gestión: el líder la tiene en su pestaña', (tester) async {
       await tester.pumpWidget(createTestWidget(const ProfilePage(), asLeader: true));
       await settleRequests(tester);
 
-      expect(find.text('Mi Célula'), findsOneWidget);
+      expect(find.text('Células de la iglesia'), findsNothing);
+      // Lo suyo de miembro sigue estando.
+      expect(find.text('Editar Perfil'), findsOneWidget);
     });
 
-    testWidgets('el perfil de un miembro corriente no la ofrece', (tester) async {
+    testWidgets('el perfil de un miembro corriente tampoco la ofrece', (tester) async {
       await tester.pumpWidget(createTestWidget(const ProfilePage()));
       await settleRequests(tester);
 
-      expect(find.text('Mi Célula'), findsNothing);
+      expect(find.text('Células de la iglesia'), findsNothing);
+    });
+  });
+
+  group('El inicio cambia según de quién responde', () {
+    testWidgets('el miembro conserva su inicio de siempre', (tester) async {
+      await tester.pumpWidget(createTestWidget(const HomePage()));
+      await settleRequests(tester);
+
+      expect(find.text('Noticias'), findsOneWidget);
+      expect(find.text('Conectar'), findsNothing);
+      // Nada de la gestión de célula se le cuela.
+      expect(find.textContaining('tu célula'), findsNothing);
+    });
+
+    testWidgets('el líder abre en su célula, no en la cuadrícula de la iglesia', (tester) async {
+      await tester.pumpWidget(createTestWidget(const HomePage(), asLeader: true));
+      await settleRequests(tester);
+
+      expect(find.text('Célula Norte'), findsOneWidget);
+      expect(find.text('Esto es lo que pasa con tu célula.'), findsOneWidget);
+      expect(find.text('Enviar aviso'), findsOneWidget);
+    });
+
+    testWidgets('el inicio del líder avisa de lo que quedó pendiente', (tester) async {
+      await tester.pumpWidget(createTestWidget(const HomePage(), asLeader: true));
+      await settleRequests(tester);
+
+      expect(find.text('PENDIENTE'), findsOneWidget);
+      // El informe de la respuesta simulada está en borrador.
+      expect(find.textContaining('informe en borrador'), findsOneWidget);
+      // Y una persona figura como que necesita atención.
+      expect(find.textContaining('necesita atención cercana'), findsOneWidget);
+    });
+
+    testWidgets('lo de la iglesia sigue a mano para el líder', (tester) async {
+      await tester.pumpWidget(createTestWidget(const HomePage(), asLeader: true));
+      await settleRequests(tester);
+
+      // Al ceder «Conectar» su sitio en la barra, estos accesos se quedarían
+      // sin puerta si no estuvieran aquí.
+      await tester.drag(find.byType(ListView), const Offset(0, -400));
+      await tester.pumpAndSettle();
+
+      expect(find.text('DE LA IGLESIA'), findsOneWidget);
+      expect(find.text('Oración'), findsOneWidget);
+      expect(find.text('Contacto'), findsOneWidget);
+      expect(find.text('Devocionales'), findsOneWidget);
     });
   });
 }
