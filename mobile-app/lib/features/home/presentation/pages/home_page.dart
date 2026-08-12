@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/notifications/notification_service.dart';
+import '../../../../core/widgets/app_images.dart';
 import '../providers/home_provider.dart';
 
 import '../../../../core/providers/core_providers.dart';
@@ -47,20 +48,17 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     final settingsAsync = ref.watch(publicSettingsProvider);
     final authState = ref.watch(authProvider);
-    final unreadCount = ref.watch(localNotificationsProvider).where((n) => !n.isRead).length;
+    final unreadCount = ref.watch(unreadNotificationsCountProvider);
 
     return Scaffold(
       backgroundColor: AppColors.darkGreen,
       body: Stack(
         children: [
           // Background Image (Worship photo aligned to bottom so crowd fills lower screen)
-          Positioned.fill(
-            child: Image.asset(
+          const Positioned.fill(
+            child: AppBackground(
               'assets/images/worship_bg.png',
-              fit: BoxFit.cover,
               alignment: Alignment.bottomCenter,
-              width: double.infinity,
-              height: double.infinity,
             ),
           ),
           // Subtle dark gradient overlay: darker at top for text readability, 100% transparent at bottom for photo vibrancy
@@ -111,12 +109,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       children: [
                         Row(
                           children: [
-                            Image.asset(
-                              'assets/logos/logo.png',
-                              width: 44,
-                              height: 44,
-                              color: AppColors.dorado,
-                            ),
+                            const AppLogo(size: 44, color: AppColors.dorado),
                             const SizedBox(width: 10),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,

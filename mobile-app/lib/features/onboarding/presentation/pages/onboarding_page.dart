@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_images.dart';
 
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
@@ -28,13 +29,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
       body: Stack(
         children: [
           // Background Image (100% full screen background image)
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/splash_bg.png',
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-            ),
+          const Positioned.fill(
+            child: AppBackground('assets/images/splash_bg.png'),
           ),
           // Subtle dark overlay to ensure readability
           Positioned.fill(
@@ -54,16 +50,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Image.asset(
-                        'assets/logos/logo.png',
-                        width: 38,
-                        height: 38,
-                        errorBuilder: (context, error, stackTrace) => const Icon(
-                          Icons.church,
-                          color: AppColors.dorado,
-                          size: 24,
-                        ),
-                      ),
+                      const AppLogo(size: 38),
                       const SizedBox(width: 8),
                       Text(
                         'GÉNESIS APP',

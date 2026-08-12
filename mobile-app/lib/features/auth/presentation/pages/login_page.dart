@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_images.dart';
 import '../providers/auth_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -71,28 +72,28 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     final isLoading = state.maybeWhen(loading: () => true, orElse: () => false);
 
-    return Scaffold(
-      backgroundColor: AppColors.darkGreen,
-      body: Stack(
-        children: [
-          // Background Image (100% full screen background image)
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/splash_bg.png',
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-            ),
-          ),
-          // Subtle dark overlay to ensure readability
-          Positioned.fill(
-            child: Container(
-              color: AppColors.darkGreen.withValues(alpha: 0.65),
-            ),
-          ),
+    // El fondo va fuera del `Scaffold`, no dentro de su cuerpo.
+    //
+    // Al tocar un campo se abre el teclado y el cuerpo del Scaffold se encoge
+    // para dejarle sitio. Con la imagen dentro, esos 10 MB se reescalaban en
+    // cada fotograma de la animación del teclado y la pantalla se arrastraba.
+    // Aquí fuera nadie la toca: el teclado sólo mueve el formulario.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Base opaca: la daba el `Scaffold` cuando el fondo vivía dentro. Si
+        // la foto no cargara, detrás no puede quedar el vacío.
+        const ColoredBox(color: AppColors.darkGreen),
+        const AppBackground('assets/images/splash_bg.png'),
+        // Oscurecido para que el texto se lea sobre la foto.
+        ColoredBox(color: AppColors.darkGreen.withValues(alpha: 0.65)),
 
-          // Content
-          SafeArea(
+        Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Stack(
+            children: [
+              // Content
+              SafeArea(
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
@@ -106,16 +107,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Image.asset(
-                            'assets/logos/logo.png',
-                            width: 38,
-                            height: 38,
-                            errorBuilder: (context, error, stackTrace) => const Icon(
-                              Icons.church,
-                              color: AppColors.dorado,
-                              size: 24,
-                            ),
-                          ),
+                          const AppLogo(size: 38),
                           const SizedBox(width: 8),
                           Text(
                             'GÉNESIS APP',
@@ -370,20 +362,22 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             ),
           ),
 
-          // Botón para volver cuando se llegó desde otra pantalla: antes no
-          // había forma visible de regresar sin cerrar la app.
-          if (context.canPop())
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 4,
-              left: 4,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: AppColors.crema),
-                tooltip: 'Volver',
-                onPressed: isLoading ? null : () => context.pop(),
-              ),
-            ),
-        ],
-      ),
+              // Botón para volver cuando se llegó desde otra pantalla: antes
+              // no había forma visible de regresar sin cerrar la app.
+              if (context.canPop())
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 4,
+                  left: 4,
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: AppColors.crema),
+                    tooltip: 'Volver',
+                    onPressed: isLoading ? null : () => context.pop(),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

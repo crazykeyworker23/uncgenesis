@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_images.dart';
 import '../providers/auth_provider.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
@@ -74,13 +75,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Svg Logo
-                  Center(
-                    child: Image.asset(
-                      'assets/logos/logo.png',
-                      width: 54,
-                      height: 54,
-                      color: AppColors.dorado,
-                    ),
+                  const Center(
+                    child: AppLogo(size: 54, color: AppColors.dorado),
                   ),
                   const SizedBox(height: 12),
                   const Center(

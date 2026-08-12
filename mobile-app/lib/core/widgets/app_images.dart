@@ -1,0 +1,80 @@
+/// Imágenes de la app decodificadas al tamaño en que se van a ver.
+///
+/// Flutter guarda en memoria el mapa de bits **a la resolución del archivo**,
+/// no a la del hueco donde se dibuja. Los fondos son de 1080×2340 —unos 10 MB
+/// descomprimidos cada uno— y el logotipo es de 1024×1024, o sea 4 MB, para
+/// verse casi siempre a 38 puntos. Sin acotarlo, cada repintado obliga a
+/// reescalar todo eso.
+///
+/// `cacheWidth` traslada el trabajo al momento de decodificar, una sola vez.
+library;
+
+import 'package:flutter/material.dart';
+
+import '../../app/theme/app_colors.dart';
+
+/// Fondo a pantalla completa.
+///
+/// Se aísla en su propia capa de composición: así, cuando cambia algo por
+/// delante —se abre el teclado, se escribe una letra— el sistema reutiliza la
+/// capa ya pintada en lugar de rehacer la imagen entera.
+///
+/// Va colocado **fuera** del cuerpo del `Scaffold` en las pantallas con
+/// formulario. Dentro, al abrir el teclado el cuerpo se encoge, el fondo se
+/// reescala en cada fotograma de la animación y la pantalla se arrastra.
+class AppBackground extends StatelessWidget {
+  final String asset;
+  final Alignment alignment;
+
+  const AppBackground(this.asset, {super.key, this.alignment = Alignment.center});
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+
+    return RepaintBoundary(
+      child: Image.asset(
+        asset,
+        fit: BoxFit.cover,
+        alignment: alignment,
+        width: double.infinity,
+        height: double.infinity,
+        // Se decodifica al ancho real de la pantalla. En un teléfono de 720
+        // puntos de ancho son 4,5 MB en vez de 10.
+        cacheWidth: (media.size.width * media.devicePixelRatio).round(),
+        // El fondo es decorativo: si faltara, basta el color de la pantalla.
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      ),
+    );
+  }
+}
+
+/// Logotipo de la iglesia.
+///
+/// El archivo es de 1024×1024 y se usa desde 38 hasta 200 puntos. Cada sitio
+/// dice a qué tamaño lo necesita y se decodifica sólo a eso.
+class AppLogo extends StatelessWidget {
+  final double size;
+  final Color? color;
+
+  const AppLogo({super.key, this.size = 38, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = MediaQuery.of(context).devicePixelRatio;
+
+    return Image.asset(
+      'assets/logos/logo.png',
+      width: size,
+      height: size,
+      color: color,
+      fit: BoxFit.contain,
+      cacheWidth: (size * ratio).round(),
+      errorBuilder: (_, __, ___) => Icon(
+        Icons.church,
+        color: color ?? AppColors.dorado,
+        size: size * 0.65,
+      ),
+    );
+  }
+}

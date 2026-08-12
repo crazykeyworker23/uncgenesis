@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_images.dart';
 import '../../../home/presentation/providers/home_provider.dart';
 
 class SplashPage extends ConsumerStatefulWidget {
@@ -52,13 +53,8 @@ class _SplashPageState extends ConsumerState<SplashPage> {
       body: Stack(
         children: [
           // 1. New Worship Background Image covering 100% full screen
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/worship_bg.png',
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-            ),
+          const Positioned.fill(
+            child: AppBackground('assets/images/worship_bg.png'),
           ),
 
           // 2. Dark overlay gradient for dramatic contrast
@@ -84,13 +80,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Clean transparent Golden Logo
-                Image.asset(
-                  'assets/logos/logo.png',
-                  width: 200,
-                  height: 200,
-                  color: AppColors.dorado,
-                  fit: BoxFit.contain,
-                ),
+                const AppLogo(size: 200, color: AppColors.dorado),
                 const SizedBox(height: 20),
                 const Text(
                   'GÉNESIS',

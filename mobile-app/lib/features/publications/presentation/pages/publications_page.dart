@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/utils/date_formatter.dart';
+import '../../../../core/widgets/app_images.dart';
 import '../../../notifications/presentation/providers/notifications_provider.dart';
 import '../providers/publications_provider.dart';
 import '../../data/models/publication_model.dart';
@@ -56,7 +57,7 @@ class _PublicationsPageState extends ConsumerState<PublicationsPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(publicationsProvider);
-    final unreadCount = ref.watch(localNotificationsProvider).where((n) => !n.isRead).length;
+    final unreadCount = ref.watch(unreadNotificationsCountProvider);
 
     final contentTypes = [
       {'label': 'Todas', 'value': 'ALL'},
@@ -80,16 +81,7 @@ class _PublicationsPageState extends ConsumerState<PublicationsPage> {
                 children: [
                   Row(
                     children: [
-                      Image.asset(
-                        'assets/logos/logo.png',
-                        width: 38,
-                        height: 38,
-                        errorBuilder: (context, error, stackTrace) => const Icon(
-                          Icons.church,
-                          color: AppColors.dorado,
-                          size: 24,
-                        ),
-                      ),
+                      const AppLogo(size: 38),
                       const SizedBox(width: 8),
                       Text(
                         'GÉNESIS APP',
