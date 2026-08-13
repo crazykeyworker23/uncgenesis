@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:go_router/go_router.dart';
 import '../../app/router/app_router.dart';
 import '../network/api_client.dart';
 import '../widgets/in_app_notification_banner.dart';
@@ -319,7 +320,9 @@ class NotificationService {
   /// La usan los tres caminos por los que se puede tocar uno: el que llega por
   /// Firebase, el que levanta la propia app y el listado de dentro. Así los
   /// tres llevan al mismo sitio.
-  Future<void> openDeepLink(String? ruta) async {
+  Future<void> openDeepLink(String? ruta, {GoRouter? router}) async {
+    final navegador = router ?? appRouter;
+
     final destino = (ruta != null && ruta.isNotEmpty &&
             _destinosPermitidos.any((permitido) => ruta.startsWith(permitido)))
         ? ruta
@@ -330,14 +333,30 @@ class NotificationService {
     // Si la app venía cerrada, el splash todavía está decidiendo a dónde ir.
     // Navegar antes de que termine haría que nos pisara la ruta y el usuario
     // acabaría en el inicio en lugar de en lo que tocó.
+    // `state.uri` y no `currentConfiguration.uri`: el segundo informa de la
+    // pantalla base y se queda corto en cuanto hay algo apilado encima, que es
+    // justo lo que hacen estos avisos.
     for (var intento = 0; intento < 30; intento++) {
-      final actual = appRouter.routerDelegate.currentConfiguration.uri.path;
+      final actual = navegador.state.uri.path;
       if (actual != '/splash' && actual != '/') break;
       await Future.delayed(const Duration(milliseconds: 300));
     }
 
     try {
-      appRouter.go(destino);
+      final actual = navegador.state.uri.path;
+
+      // Todavía no ha entrado a la app: primero termina de presentarse o de
+      // iniciar sesión, y no se le saca de ahí a media faena.
+      if (actual == '/onboarding' || actual.startsWith('/auth')) return;
+
+      // Ya está mirando eso: apilar otra copia encima no aporta y le obliga a
+      // volver dos veces.
+      if (actual == destino) return;
+
+      // Se apila encima, no se reemplaza. Con `go` la pantalla del aviso
+      // quedaba sola en la pila: no salía la flecha de volver y el botón de
+      // atrás del teléfono cerraba la aplicación.
+      navegador.push(destino);
     } catch (e) {
       debugPrint('No se pudo abrir el destino del aviso ($destino): $e');
     }
