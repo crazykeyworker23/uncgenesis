@@ -2,11 +2,19 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+/// Resultado de intentar renovar la sesión.
+///
+/// Separa «el servidor dijo que no» de «no se pudo ni preguntar». Sólo lo
+/// primero justifica borrar la sesión: si se borrara también cuando se agota
+/// el tiempo de espera, una mala cobertura echaría a la persona de su cuenta y
+/// a partir de ahí la app enviaría todas las peticiones sin credenciales.
+typedef RefreshOutcome = ({String? accessToken, bool refused});
+
 class ApiClient {
   final Dio dio;
   final FlutterSecureStorage _storage;
   bool _isRefreshing = false;
-  Completer<String?>? _refreshCompleter;
+  Completer<RefreshOutcome>? _refreshCompleter;
 
   /// Se invoca cuando el backend invalida la sesión y hay que limpiar el
   /// estado de la app. Sin esto, los tokens se borraban en silencio y la
@@ -117,12 +125,16 @@ class ApiClient {
         return null;
       }
 
-      final newAccessToken = await _performTokenRefresh();
-      if (newAccessToken == null) {
-        await _logout();
-        return null;
+      final outcome = await _performTokenRefresh();
+      if (outcome.accessToken != null) {
+        return _replay(options, accessToken: outcome.accessToken);
       }
-      return _replay(options, accessToken: newAccessToken);
+
+      // La sesión sólo se borra si el servidor rechazó la renovación. Si
+      // simplemente no se pudo llegar hasta él, se deja como está: la
+      // petición falla, y al recuperar la conexión se vuelve a intentar.
+      if (outcome.refused) await _logout();
+      return null;
     }
 
     return null;
@@ -159,19 +171,24 @@ class ApiClient {
 
   /// Renueva el token de acceso.
   ///
-  /// Devuelve `null` cuando no se puede renovar. Las peticiones que fallen a la
-  /// vez comparten el mismo refresco en lugar de lanzar uno cada una.
-  Future<String?> _performTokenRefresh() async {
+  /// Las peticiones que caduquen a la vez comparten este mismo refresco en
+  /// lugar de lanzar uno cada una. Importa que sea uno solo: el servidor rota
+  /// el token de refresco en cada uso y anula el anterior, así que dos
+  /// refrescos en paralelo se pisan y el segundo tumba la sesión.
+  Future<RefreshOutcome> _performTokenRefresh() async {
     final inFlight = _refreshCompleter;
     if (_isRefreshing && inFlight != null) {
       return inFlight.future;
     }
 
-    final completer = Completer<String?>();
+    final completer = Completer<RefreshOutcome>();
     _isRefreshing = true;
     _refreshCompleter = completer;
 
     String? newAccessToken;
+    // Sin token de refresco no hay nada que renovar: eso sí es sesión
+    // terminada, no un problema de red.
+    var refused = true;
 
     try {
       final refreshToken = await _storage.read(key: 'refresh_token');
@@ -195,11 +212,18 @@ class ApiClient {
             await _storage.write(key: 'refresh_token', value: rotated);
           }
           newAccessToken = access;
+          refused = false;
         }
       }
+    } on DioException catch (error) {
+      // Sólo cuenta como sesión terminada si el servidor contestó que no. Un
+      // tiempo de espera agotado o un corte de red no son motivo para borrarla.
+      final status = error.response?.statusCode;
+      refused = status == 401 || status == 403;
+      newAccessToken = null;
     } catch (_) {
-      // Un refresco fallido se comunica como ausencia de token: quien espera
-      // ya lo interpreta como sesión caducada.
+      // Cualquier otro fallo inesperado: se deja la sesión donde está.
+      refused = false;
       newAccessToken = null;
     } finally {
       _isRefreshing = false;
@@ -207,11 +231,11 @@ class ApiClient {
       // Se completa una sola vez y siempre con un valor, para que las
       // peticiones que esperaban este mismo refresco no queden colgadas.
       if (!completer.isCompleted) {
-        completer.complete(newAccessToken);
+        completer.complete((accessToken: newAccessToken, refused: refused));
       }
     }
 
-    return newAccessToken;
+    return (accessToken: newAccessToken, refused: refused);
   }
 
   Future<void> _logout() async {

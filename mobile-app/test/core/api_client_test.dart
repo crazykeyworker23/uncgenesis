@@ -59,6 +59,11 @@ class _FakeBackend {
   /// Si es `true`, `/auth/token/refresh/` devuelve un token nuevo.
   bool refreshSucceeds = true;
 
+  /// Con qué código responde el refresco cuando no tiene éxito. 401 es el
+  /// servidor rechazando la sesión; 500 o 503 son un problema suyo, no de las
+  /// credenciales.
+  int refreshFailureStatus = 401;
+
   /// Rutas que dejan de responder 401 una vez renovado el token.
   bool acceptAfterRefresh = true;
 
@@ -77,7 +82,7 @@ class _FakeBackend {
             ..headers.contentType = ContentType.json
             ..write(jsonEncode({'access': 'token-nuevo'}));
         } else {
-          request.response.statusCode = 401;
+          request.response.statusCode = refreshFailureStatus;
         }
         await request.response.close();
         return;
@@ -164,6 +169,42 @@ void main() {
 
       expect(avisos, 1);
       expect(storage.data.containsKey('refresh_token'), isFalse);
+    });
+
+    test('si el servidor falla al renovar, la sesión se conserva', () async {
+      // Aquí estaba el fallo que dejaba a la gente con «las credenciales de
+      // autenticación no se proveyeron»: cualquier tropiezo al renovar
+      // —incluido que el servidor se cayera un momento— borraba los tokens.
+      // A partir de ahí la app seguía creyéndose dentro y mandaba todas las
+      // peticiones sin credenciales.
+      backend.refreshSucceeds = false;
+      backend.refreshFailureStatus = 503;
+      storage.data['access_token'] = 'token-caducado';
+      storage.data['refresh_token'] = 'refresh-valido';
+
+      var avisos = 0;
+      client.onSessionExpired = () => avisos++;
+
+      await expectLater(client.dio.get('/eventos/'), throwsA(isA<DioException>()));
+
+      // La petición falla, pero la sesión sigue en pie para volver a intentarlo.
+      expect(storage.data['refresh_token'], 'refresh-valido');
+      expect(storage.data['access_token'], 'token-caducado');
+      expect(avisos, 0);
+    });
+
+    test('sólo un rechazo del servidor da la sesión por terminada', () async {
+      // La contraparte de la prueba anterior: un 401 al renovar sí significa
+      // que el token de refresco ya no vale y hay que volver a entrar.
+      backend.refreshSucceeds = false;
+      backend.refreshFailureStatus = 401;
+      storage.data['access_token'] = 'token-caducado';
+      storage.data['refresh_token'] = 'refresh-caducado';
+
+      await expectLater(client.dio.get('/eventos/'), throwsA(isA<DioException>()));
+
+      expect(storage.data.containsKey('refresh_token'), isFalse);
+      expect(storage.data.containsKey('access_token'), isFalse);
     });
 
     test('peticiones simultáneas comparten un único refresco', () async {
