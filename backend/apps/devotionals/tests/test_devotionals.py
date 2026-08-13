@@ -158,3 +158,126 @@ def test_duplicate_devotional(staff_client, devotional):
     assert cloned.title == f"Copia de {devotional.title}"
     assert cloned.status == DevotionalStatus.DRAFT
     assert cloned.date != devotional.date
+
+
+WEEKLY_PLAN_URL = reverse('devotional-weekly-plan')
+PUBLISH_WEEK_URL = reverse('devotional-publish-week')
+
+
+def _plan(start='2026-08-10'):
+    """Un plan como el que reparte la iglesia: un pasaje por día."""
+    pasajes = [
+        'Hebreos 13', '1 Samuel 16', '2 Samuel 6', 'Daniel 1',
+        'Daniel 6', 'Lucas 1', 'Job 1',
+    ]
+    return {
+        'start_date': start,
+        'days': [{'bible_passage': p, 'content': f'Lee {p} y anota lo que te hable.'}
+                 for p in pasajes],
+    }
+
+
+@pytest.mark.django_db
+class TestPlanSemanal:
+    """
+    Cargar la semana de una vez.
+
+    Antes eran siete formularios, cada uno pidiendo título, pasaje, el texto
+    bíblico completo y una reflexión: inviable para un plan de lecturas que
+    cambia cada semana.
+    """
+
+    def test_carga_los_siete_dias_como_borrador(self, staff_client):
+        res = staff_client.post(WEEKLY_PLAN_URL, _plan(), format='json')
+
+        assert res.status_code == status.HTTP_201_CREATED
+        assert Devotional.objects.count() == 7
+        # Ninguno sale a la calle hasta publicarlo: un error de dedo no manda
+        # siete notificaciones equivocadas.
+        assert Devotional.objects.filter(status=DevotionalStatus.DRAFT).count() == 7
+
+    def test_cada_dia_cae_en_su_fecha(self, staff_client):
+        staff_client.post(WEEKLY_PLAN_URL, _plan(), format='json')
+
+        lunes = Devotional.objects.get(date='2026-08-10')
+        domingo = Devotional.objects.get(date='2026-08-16')
+        assert lunes.bible_passage == 'Hebreos 13'
+        assert domingo.bible_passage == 'Job 1'
+
+    def test_el_texto_biblico_ya_no_es_obligatorio(self, staff_client):
+        """Se indica el pasaje a leer, no se transcribe el capítulo entero."""
+        staff_client.post(WEEKLY_PLAN_URL, _plan(), format='json')
+
+        assert Devotional.objects.get(date='2026-08-10').bible_text == ''
+
+    def test_volver_a_cargar_la_semana_corrige_en_lugar_de_duplicar(self, staff_client):
+        staff_client.post(WEEKLY_PLAN_URL, _plan(), format='json')
+
+        corregido = _plan()
+        corregido['days'][0]['bible_passage'] = 'Hebreos 12'
+        staff_client.post(WEEKLY_PLAN_URL, corregido, format='json')
+
+        assert Devotional.objects.count() == 7
+        assert Devotional.objects.get(date='2026-08-10').bible_passage == 'Hebreos 12'
+
+    def test_no_pisa_lo_que_ya_se_publico(self, staff_client, superuser):
+        """Sobrescribir en silencio algo que la gente ya recibió seria peor."""
+        Devotional.objects.create(
+            title='Ya salió', date='2026-08-12', bible_passage='Salmo 23',
+            content='x', author=superuser, status=DevotionalStatus.PUBLISHED,
+        )
+
+        res = staff_client.post(WEEKLY_PLAN_URL, _plan(), format='json')
+
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert '2026-08-12' in res.data['error']
+        assert Devotional.objects.get(date='2026-08-12').bible_passage == 'Salmo 23'
+
+    def test_exige_los_siete_dias(self, staff_client):
+        incompleto = _plan()
+        incompleto['days'] = incompleto['days'][:3]
+
+        res = staff_client.post(WEEKLY_PLAN_URL, incompleto, format='json')
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_se_puede_releer_para_corregirlo(self, staff_client):
+        staff_client.post(WEEKLY_PLAN_URL, _plan(), format='json')
+
+        res = staff_client.get(WEEKLY_PLAN_URL, {'start_date': '2026-08-10'})
+
+        assert res.status_code == status.HTTP_200_OK
+        assert len(res.data['days']) == 7
+        assert res.data['days'][0]['weekday'] == 'Lunes'
+        assert res.data['days'][0]['bible_passage'] == 'Hebreos 13'
+        assert res.data['days'][6]['weekday'] == 'Domingo'
+
+    def test_una_semana_vacia_se_devuelve_igual_para_poder_llenarla(self, staff_client):
+        res = staff_client.get(WEEKLY_PLAN_URL, {'start_date': '2026-09-07'})
+
+        assert res.status_code == status.HTTP_200_OK
+        assert len(res.data['days']) == 7
+        assert all(dia['id'] is None for dia in res.data['days'])
+
+
+@pytest.mark.django_db
+class TestPublicarPlanSemanal:
+    def test_publica_los_siete_y_programa_sus_avisos(self, staff_client):
+        from apps.notifications.models import Notification
+
+        staff_client.post(WEEKLY_PLAN_URL, _plan(), format='json')
+        res = staff_client.post(PUBLISH_WEEK_URL, {'start_date': '2026-08-10'}, format='json')
+
+        assert res.status_code == status.HTTP_200_OK
+        assert Devotional.objects.filter(status=DevotionalStatus.PUBLISHED).count() == 7
+        # Un aviso por día, cada uno para las 7:00 de esa mañana.
+        assert Notification.objects.count() == 7
+
+    def test_sin_borradores_lo_dice_en_lugar_de_callar(self, staff_client):
+        res = staff_client.post(PUBLISH_WEEK_URL, {'start_date': '2026-10-05'}, format='json')
+
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'borrador' in res.data['error']
+
+    def test_sin_fecha_avisa(self, staff_client):
+        res = staff_client.post(PUBLISH_WEEK_URL, {}, format='json')
+        assert res.status_code == status.HTTP_400_BAD_REQUEST

@@ -9,6 +9,7 @@ import { ServiceList } from '../pages/ServiceList';
 import { ServiceForm } from '../pages/ServiceForm';
 import { DevotionalList } from '../pages/DevotionalList';
 import { DevotionalForm } from '../pages/DevotionalForm';
+import { DevotionalWeeklyPlan } from '../pages/DevotionalWeeklyPlan';
 import { EventList } from '../pages/EventList';
 import { EventForm } from '../pages/EventForm';
 import { CellList } from '../pages/CellList';
@@ -69,6 +70,9 @@ export default function AppRouter() {
             <Route path="/devocionales" element={<DevotionalList />} />
           </Route>
           <Route element={<ProtectedRoute permission={['DEVOTIONALS_CREATE', 'DEVOTIONALS_EDIT']} />}>
+            {/* Antes que «/devocionales/nuevo» no importa: son rutas distintas,
+                pero se agrupan por el mismo permiso de redacción. */}
+            <Route path="/devocionales/plan-semanal" element={<DevotionalWeeklyPlan />} />
             <Route path="/devocionales/nuevo" element={<DevotionalForm />} />
             <Route path="/devocionales/:id/editar" element={<DevotionalForm />} />
           </Route>

@@ -13,7 +13,8 @@ import {
   Calendar,
   AlertCircle,
   Eye,
-  BookOpen
+  BookOpen,
+  CalendarDays
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { Can } from '../components/auth/Can';
@@ -90,6 +91,18 @@ export const DevotionalList: React.FC = () => {
           <h1 className="text-2xl font-extrabold text-crema leading-none">Devocionales Diarios</h1>
           <p className="text-xs text-crema text-opacity-50 mt-1.5">Redacta y programa las lecturas y reflexiones del devocional diario para la comunidad.</p>
         </div>
+        <div className="flex items-center gap-2 self-start sm:self-center">
+        <Can permission="DEVOTIONALS_CREATE">
+        {/* Cargar la semana de una vez: siete pasajes en una pantalla, en vez
+            de siete formularios largos. */}
+        <Link
+          to="/devocionales/plan-semanal"
+          className="flex items-center justify-center gap-2 btn-secondary text-xs font-bold"
+        >
+          <CalendarDays size={16} />
+          Plan semanal
+        </Link>
+        </Can>
         <Can permission="DEVOTIONALS_CREATE">
         <Link 
           to="/devocionales/nuevo" 
@@ -99,6 +112,7 @@ export const DevotionalList: React.FC = () => {
           Nuevo Devocional
         </Link>
         </Can>
+        </div>
       </div>
 
       {/* Filters Bar */}

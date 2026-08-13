@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework import viewsets, status, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -6,10 +9,13 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 
 from apps.devotionals.models import Devotional, DevotionalStatus
-from apps.devotionals.serializers import DevotionalSerializer
+from apps.devotionals.serializers import DevotionalSerializer, WeeklyPlanSerializer
 from apps.roles.permissions import HasAppPermission
 from apps.roles.utils import has_any_permission
 from apps.audit.services import log_action
+
+#: Etiqueta de cada día, en el orden en que se pinta el plan.
+WEEKDAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
 
 def schedule_devotional_notification(devotional, sender):
@@ -129,8 +135,12 @@ class DevotionalViewSet(viewsets.ModelViewSet):
             return 'DEVOTIONALS_EDIT'
         elif self.action in ['destroy']:
             return 'DEVOTIONALS_DELETE'
-        elif self.action in ['publish', 'archive']:
+        elif self.action in ['publish', 'archive', 'publish_week']:
             return 'DEVOTIONALS_PUBLISH'
+        elif self.action == 'weekly_plan':
+            # Leer el plan de una semana no exige nada especial: lo hace quien
+            # ya entra a la sección. Cargarlo sí, que crea siete devocionales.
+            return None if self.request.method == 'GET' else 'DEVOTIONALS_CREATE'
         return None
 
     def perform_create(self, serializer):
@@ -279,3 +289,142 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         )
         
         return Response(DevotionalSerializer(cloned).data, status=status.HTTP_201_CREATED)
+
+    # ── Plan de lecturas semanal ────────────────────────────────────────────
+    #
+    # Cargar la semana día por día eran siete formularios largos. Aquí se
+    # entra el lunes y los siete pasajes de una vez.
+
+    @extend_schema(request=WeeklyPlanSerializer, responses={200: DevotionalSerializer(many=True)})
+    @action(detail=False, methods=['get', 'post'], url_path='weekly-plan')
+    def weekly_plan(self, request):
+        """
+        Consulta o carga el plan de una semana.
+
+        En GET devuelve los siete días a partir de `start_date`, estén
+        cargados o no, para que el panel pinte la semana completa y se pueda
+        corregir lo ya escrito.
+
+        En POST los crea o actualiza como borrador. No toca lo que ya esté
+        publicado: sobrescribir en silencio un devocional que la gente ya
+        recibió seria peor que avisar.
+        """
+        if request.method == 'GET':
+            start = parse_date(request.query_params.get('start_date') or '')
+            if start is None:
+                return Response(
+                    {'error': 'Indica el lunes de la semana en start_date (2026-08-10).'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            return Response(self._describe_week(start))
+
+        serializer = WeeklyPlanSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        start = serializer.validated_data['start_date']
+        days = serializer.validated_data['days']
+        fechas = [start + timedelta(days=i) for i in range(7)]
+
+        publicados = list(
+            Devotional.objects.filter(date__in=fechas)
+            .exclude(status=DevotionalStatus.DRAFT)
+            .values_list('date', flat=True)
+        )
+        if publicados:
+            listado = ', '.join(fecha.isoformat() for fecha in sorted(publicados))
+            return Response(
+                {'error': f'Ya hay devocionales publicados en estas fechas: {listado}. '
+                          f'Edítalos uno a uno o elige otra semana.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        for fecha, dia in zip(fechas, days):
+            Devotional.objects.update_or_create(
+                date=fecha,
+                defaults={
+                    # El título es el pasaje: en un plan de lecturas es lo que
+                    # identifica el día, y evita pedir un dato más por fila.
+                    'title': dia['bible_passage'],
+                    'bible_passage': dia['bible_passage'],
+                    'content': dia['content'],
+                    'author': request.user,
+                    'status': DevotionalStatus.DRAFT,
+                },
+            )
+
+        log_action(
+            user=request.user,
+            action="CREATE",
+            module="DEVOTIONALS",
+            object_id=None,
+            description=f"Cargó el plan semanal del {start} al {fechas[-1]}",
+            request=request,
+        )
+        return Response(self._describe_week(start), status=status.HTTP_201_CREATED)
+
+    @extend_schema(request=None, responses={200: DevotionalSerializer(many=True)})
+    @action(detail=False, methods=['post'], url_path='weekly-plan/publish')
+    def publish_week(self, request):
+        """
+        Publica la semana entera y programa sus avisos.
+
+        Cada día queda con su notificación a las 7:00 de esa mañana, que es lo
+        que ya hacía un devocional suelto al publicarse.
+        """
+        start = parse_date(request.data.get('start_date') or '')
+        if start is None:
+            return Response(
+                {'error': 'Indica el lunes de la semana en start_date (2026-08-10).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        fechas = [start + timedelta(days=i) for i in range(7)]
+        pendientes = Devotional.objects.filter(date__in=fechas, status=DevotionalStatus.DRAFT)
+        if not pendientes.exists():
+            return Response(
+                {'error': 'No hay ningún borrador cargado para esa semana.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        publicados = 0
+        for devotional in pendientes:
+            devotional.status = DevotionalStatus.PUBLISHED
+            devotional.save()
+            schedule_devotional_notification(devotional, request.user)
+            publicados += 1
+
+        log_action(
+            user=request.user,
+            action="PUBLISH",
+            module="DEVOTIONALS",
+            object_id=None,
+            description=f"Publicó el plan semanal del {start} al {fechas[-1]}",
+            request=request,
+        )
+
+        resumen = self._describe_week(start)
+        resumen['detail'] = (
+            f'Se publicaron {publicados} día(s). Cada uno avisará a las 7:00 de su mañana.'
+        )
+        return Response(resumen, status=status.HTTP_200_OK)
+
+    def _describe_week(self, start):
+        """Los siete días de la semana, cargados o no, en orden."""
+        fechas = [start + timedelta(days=i) for i in range(7)]
+        cargados = {d.date: d for d in Devotional.objects.filter(date__in=fechas)}
+
+        return {
+            'start_date': start,
+            'end_date': fechas[-1],
+            'days': [
+                {
+                    'date': fecha,
+                    'weekday': WEEKDAYS[index],
+                    'id': cargados[fecha].id if fecha in cargados else None,
+                    'bible_passage': cargados[fecha].bible_passage if fecha in cargados else '',
+                    'content': cargados[fecha].content if fecha in cargados else '',
+                    'status': cargados[fecha].status if fecha in cargados else None,
+                }
+                for index, fecha in enumerate(fechas)
+            ],
+        }

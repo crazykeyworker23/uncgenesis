@@ -14,7 +14,11 @@ class Devotional(models.Model):
     slug = models.SlugField(max_length=255, unique=True, db_index=True, blank=True)
     date = models.DateField(unique=True, db_index=True)
     bible_passage = models.CharField(max_length=150)
-    bible_text = models.TextField()
+    # El versículo transcrito. Opcional: en un plan de lecturas semanal se
+    # indica el pasaje a leer —«Hebreos 13»— y la gente lo abre en su Biblia;
+    # exigir el texto completo obligaba a copiar capítulos enteros para cargar
+    # una semana.
+    bible_text = models.TextField(blank=True, default='')
     content = models.TextField()
     audio_url = models.URLField(max_length=500, blank=True, null=True)
     author = models.ForeignKey(
