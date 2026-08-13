@@ -244,6 +244,74 @@ class TestRoleScopedAccess:
 
 
 @pytest.mark.django_db
+class TestPanelDashboardsHaveData:
+    """
+    Cada rol del panel entra a un tablero con datos suyos.
+
+    Antes todos aterrizaban en el mismo, el de la iglesia, cuyas cifras exigen
+    REPORTS_VIEW. El editor de contenidos y el de consejeria veian una
+    pantalla de bienvenida y nada mas: hasta el bloque de solicitudes sacaba
+    sus datos del informe general que el servidor les niega.
+
+    Aqui se comprueba que lo que cada tablero pide es justo lo que su rol
+    puede leer.
+    """
+
+    def test_consejeria_lee_las_solicitudes_de_su_tablero(self, user_with_role):
+        soporte = user_with_role('consejero.panel@genesisapp.org', RoleType.SUPPORT)
+        client = _client_for(soporte)
+
+        for nombre in ['prayer-requests-list', 'visitor-requests-list']:
+            res = client.get(reverse(nombre), {'status': 'PENDING'})
+            assert res.status_code == status.HTTP_200_OK, nombre
+            assert 'count' in res.data, nombre
+
+    def test_consejeria_sigue_sin_los_informes_de_la_iglesia(self, user_with_role):
+        """Su tablero no los pide, y aunque los pidiera no los tendria."""
+        soporte = user_with_role('consejero.panel2@genesisapp.org', RoleType.SUPPORT)
+
+        res = _client_for(soporte).get(reverse('reports-dashboard'))
+        assert res.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_el_editor_lee_los_borradores_de_su_tablero(self, user_with_role):
+        editor = user_with_role('editor.panel@genesisapp.org', RoleType.CONTENT_EDITOR)
+        client = _client_for(editor)
+
+        for nombre in ['publication-list', 'devotional-list', 'service-list', 'event-list']:
+            res = client.get(reverse(nombre), {'status': 'DRAFT'})
+            assert res.status_code == status.HTTP_200_OK, nombre
+            assert 'count' in res.data, nombre
+
+    def test_el_editor_ve_los_borradores_y_el_publico_no(self, user_with_role, db):
+        """
+        El tablero cuenta borradores, asi que el editor tiene que verlos.
+
+        Lo contrario tambien importa: siguen fuera del alcance publico.
+        """
+        from apps.publications.models import Publication, PublicationStatus
+
+        editor = user_with_role('editor.panel2@genesisapp.org', RoleType.CONTENT_EDITOR)
+        Publication.objects.create(
+            title='Sin publicar', slug='sin-publicar', content='x',
+            status=PublicationStatus.DRAFT, author=editor,
+        )
+
+        del_editor = _client_for(editor).get(reverse('publication-list'), {'status': 'DRAFT'})
+        assert del_editor.data['count'] == 1
+
+        from rest_framework.test import APIClient
+        publico = APIClient().get(reverse('publication-list'), {'status': 'DRAFT'})
+        assert publico.data['count'] == 0
+
+    def test_el_pastor_conserva_su_tablero_completo(self, user_with_role):
+        pastor = user_with_role('pastor.panel@genesisapp.org', RoleType.ADMIN)
+
+        res = _client_for(pastor).get(reverse('reports-dashboard'))
+        assert res.status_code == status.HTTP_200_OK
+        assert 'kpis' in res.data
+
+
+@pytest.mark.django_db
 class TestCommunityMemberIsAppOnly:
     def test_member_cannot_access_admin_panel(self, user_with_role):
         """El miembro de la comunidad usa unicamente el aplicativo movil."""

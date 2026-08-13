@@ -213,23 +213,31 @@ export const CellList: React.FC = () => {
                       {/* Actions */}
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
-                          <Link
-                            to={`/celulas/${cell.id}/editar`}
-                            id={`cell-edit-${cell.id}`}
-                            className="p-2 bg-white/5 hover:bg-dorado/20 text-crema hover:text-dorado border border-white/10 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold"
-                            title="Editar grupo"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                            <span>Editar</span>
-                          </Link>
-                          <button
-                            id={`cell-delete-${cell.id}`}
-                            onClick={() => handleDelete(cell)}
-                            className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold"
-                            title="Eliminar grupo"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {/* Como en el resto de listados: no se ofrece lo que
+                              el rol no puede hacer, para que ningún enlace
+                              acabe en «sección no disponible» ni ningún botón
+                              en un rechazo del servidor. */}
+                          <Can permission={['CELLS_CREATE', 'CELLS_EDIT']}>
+                            <Link
+                              to={`/celulas/${cell.id}/editar`}
+                              id={`cell-edit-${cell.id}`}
+                              className="p-2 bg-white/5 hover:bg-dorado/20 text-crema hover:text-dorado border border-white/10 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold"
+                              title="Editar grupo"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                              <span>Editar</span>
+                            </Link>
+                          </Can>
+                          <Can permission="CELLS_DELETE">
+                            <button
+                              id={`cell-delete-${cell.id}`}
+                              onClick={() => handleDelete(cell)}
+                              className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl transition-all flex items-center gap-1.5 text-xs font-semibold"
+                              title="Eliminar grupo"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </Can>
                         </div>
                       </td>
                     </tr>

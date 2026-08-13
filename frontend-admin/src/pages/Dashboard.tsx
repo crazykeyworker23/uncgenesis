@@ -28,6 +28,8 @@ import {
 import { apiClient } from '../api/client';
 import { usePermissions } from '../store/authStore';
 import { Can } from '../components/auth/Can';
+import { ContentDashboard } from '../features/dashboard/ContentDashboard';
+import { RequestsDashboard } from '../features/dashboard/RequestsDashboard';
 
 interface DashboardData {
   kpis: {
@@ -48,7 +50,40 @@ interface DashboardData {
   }>;
 }
 
+/**
+ * Cada rol entra a su propio tablero.
+ *
+ * Antes todos aterrizaban en el de la iglesia, y quien no tiene permisos de
+ * reportes —el editor de contenidos y el de consejería— veía una pantalla de
+ * bienvenida sin un solo dato. Ahora cada uno abre viendo lo suyo.
+ *
+ * El orden importa: el pastorado tiene también permiso de solicitudes, así que
+ * su tablero se comprueba primero.
+ */
 export const Dashboard: React.FC = () => {
+  const { can } = usePermissions();
+
+  if (can('REPORTS_VIEW')) return <ChurchDashboard />;
+  if (can('REQUESTS_VIEW')) return <RequestsDashboard />;
+  if (can(['PUBLICATIONS_VIEW', 'DEVOTIONALS_VIEW', 'SERVICES_VIEW', 'EVENTS_VIEW'])) {
+    return <ContentDashboard />;
+  }
+
+  // Nadie del panel debería llegar aquí: los cuatro roles con acceso caen en
+  // alguno de los anteriores. Queda como red por si se crea un rol nuevo sin
+  // tablero, para que vea una explicación en lugar de una página en blanco.
+  return (
+    <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+      <h2 className="text-lg font-bold text-crema mb-2">Tu rol todavía no tiene un tablero</h2>
+      <p className="text-xs text-crema text-opacity-55 max-w-sm leading-relaxed">
+        Usa el menú lateral para entrar a las secciones que tienes asignadas.
+      </p>
+    </div>
+  );
+};
+
+/** Tablero del pastorado: las cifras de toda la iglesia. */
+const ChurchDashboard: React.FC = () => {
   const { can } = usePermissions();
   // Las cifras de la iglesia son información de reportes: sólo se piden si el
   // rol puede verlas, de modo que un líder o consejero no reciba un 403.
