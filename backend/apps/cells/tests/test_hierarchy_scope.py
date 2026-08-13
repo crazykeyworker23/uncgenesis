@@ -653,8 +653,16 @@ class TestCellReports:
         assert sent.data['status'] == 'SENT'
         assert sent.data['sent_at'] is not None
 
-    def test_sending_freezes_the_period_figures(self, church):
-        """Corregir una asistencia después no altera lo ya entregado."""
+    def test_sending_does_not_attach_figures_to_the_report(self, church):
+        """
+        El informe entrega lo que el líder escribe, no cifras calculadas.
+
+        Antes se congelaban tres —reuniones, asistencia media y altas— sobre el
+        periodo. No las leía nadie, y desde que el informe es de un solo día
+        salían casi siempre en cero: la fecha que elige el líder es la del día
+        que escribe, no la de una reunión registrada. Los indicadores de verdad
+        se piden a /cells/<id>/statistics/, que los calcula al momento.
+        """
         cell = church['cell_a']
         meeting = CellMeeting.objects.create(cell=cell, date='2026-08-10')
         Attendance.objects.create(
@@ -663,14 +671,14 @@ class TestCellReports:
 
         report_id = self._draft(church).data['id']
         sent = _client(church['leader_a']).post(f'{REPORTS_URL}{report_id}/send/')
-        assert sent.data['meetings_held'] == 1
-        assert sent.data['average_attendance'] == 1.0
 
-        CellMeeting.objects.create(cell=cell, date='2026-08-11')
-
-        from apps.cells.models import CellReport
-        report = CellReport.objects.get(id=report_id)
-        assert report.meetings_held == 1
+        assert sent.status_code == status.HTTP_200_OK
+        assert sent.data['meetings_held'] == 0
+        assert sent.data['average_attendance'] == 0
+        assert sent.data['new_members'] == 0
+        # Lo que sí entrega es el texto y la marca de envío.
+        assert sent.data['summary']
+        assert sent.data['sent_at'] is not None
 
     def test_a_sent_report_can_no_longer_be_edited(self, church):
         report_id = self._draft(church).data['id']

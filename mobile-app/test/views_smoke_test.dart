@@ -134,9 +134,15 @@ class MockAdapter implements HttpClientAdapter {
           '"type":"CALL","type_display":"Llamada","date":"2026-08-05",'
           '"summary":"Se le llamó para animarla.","needs_attention":false}]}';
     } else if (path.contains('/cell-reports/')) {
-      responseString = '{"count":1,"next":null,"results":[{"id":9,"cell":1,'
-          '"cell_name":"Célula Norte","period_start":"2026-07-01","period_end":"2026-07-31",'
-          '"summary":"Buen mes.","status":"DRAFT","status_display":"Borrador"}]}';
+      // El primero es de un día, como los que se redactan ahora. El segundo
+      // conserva un periodo, como los que ya se entregaron antes del cambio.
+      responseString = '{"count":2,"next":null,"results":['
+          '{"id":9,"cell":1,"cell_name":"Célula Norte",'
+          '"period_start":"2026-08-03","period_end":"2026-08-03",'
+          '"summary":"Buen mes.","status":"DRAFT","status_display":"Borrador"},'
+          '{"id":8,"cell":1,"cell_name":"Célula Norte",'
+          '"period_start":"2026-07-01","period_end":"2026-07-31",'
+          '"summary":"Mes anterior.","status":"REVIEWED","status_display":"Revisado"}]}';
     } else if (path.contains('/settings/public/')) {
       responseString = '{"app":{"app_name":"Génesis","app_description":"","splash_text":"","primary_color":"#000000","secondary_color":"#ffffff"},"church":{"church_name":"Iglesia","address":"","city":"","country":"","email":"","website":"","whatsapp":""},"schedules":[],"social_networks":[]}';
     } else if (path.contains('/devotionals/today/')) {
@@ -366,8 +372,26 @@ void main() {
       await settleRequests(tester);
 
       expect(find.text('Buen mes.'), findsOneWidget);
+      // Sólo el borrador se puede enviar; el ya revisado, no.
       expect(find.text('ENVIAR'), findsOneWidget);
       expect(find.text('EDITAR'), findsOneWidget);
+    });
+
+    testWidgets('el informe se identifica por su día, no por un periodo', (tester) async {
+      // El líder informa de un día concreto —el de la reunión—, así que la
+      // tarjeta lo dice tal cual en lugar de repetir la misma fecha dos veces.
+      await tester.pumpWidget(createTestWidget(const CellReportsPage(), asLeader: true));
+      await settleRequests(tester);
+
+      expect(find.text('Lunes 3 de agosto'), findsOneWidget);
+    });
+
+    testWidgets('los informes entregados con periodo siguen mostrándolo', (tester) async {
+      // Los que se enviaron antes del cambio no se reescriben ni se falsean.
+      await tester.pumpWidget(createTestWidget(const CellReportsPage(), asLeader: true));
+      await settleRequests(tester);
+
+      expect(find.text('01/07/2026 — 31/07/2026'), findsOneWidget);
     });
 
     testWidgets('el aviso dice a cuánta gente va a llegar', (tester) async {

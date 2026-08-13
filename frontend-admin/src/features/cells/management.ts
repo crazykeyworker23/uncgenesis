@@ -145,6 +145,8 @@ export interface CellReport {
   /** Dirección de la foto de la actividad, si la hay. */
   photo_url: string | null;
   photo_caption: string;
+  /** Cifras que se congelaban al enviar. Ya no se calculan ni se muestran:
+   *  las conservan los informes entregados antes del cambio. */
   meetings_held: number;
   average_attendance: number;
   new_members: number;

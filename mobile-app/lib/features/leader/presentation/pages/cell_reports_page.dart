@@ -15,9 +15,13 @@ import '../widgets/leader_widgets.dart';
 
 /// Informes de actividad que el líder entrega a su supervisión.
 ///
-/// Un informe se guarda primero como borrador y se envía cuando está listo. Al
-/// enviarlo, el servidor congela las cifras del periodo: si más adelante se
-/// corrige una asistencia, lo entregado no cambia.
+/// Se elige el día del que se informa y se cuenta con palabras cómo fue, con
+/// una foto si se quiere. Primero queda como borrador y se envía cuando está
+/// listo; una vez enviado ya no se toca, para que lo que se revisa sea lo que
+/// se entregó.
+///
+/// No lleva cifras: las de la célula están en «Estadísticas», calculadas al
+/// momento y siempre al día.
 class CellReportsPage extends ConsumerWidget {
   const CellReportsPage({super.key});
 
@@ -145,9 +149,7 @@ class CellReportsPage extends ConsumerWidget {
     final confirmed = await confirmLeaderAction(
       context,
       title: 'Enviar el informe',
-      message:
-          'Se entregará a tu supervisión y ya no podrás modificarlo. Las cifras del periodo '
-          'quedan congeladas tal como están hoy.',
+      message: 'Se entregará a tu supervisión y ya no podrás modificarlo.',
       confirmLabel: 'ENVIAR',
     );
     if (!confirmed || !context.mounted) return;
@@ -218,8 +220,12 @@ class _ReportCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    '${DateFormatter.shortDate(report.periodStart)} — '
-                    '${DateFormatter.shortDate(report.periodEnd)}',
+                    // Los informes nuevos son de un día. Los que ya se
+                    // entregaron con un periodo siguen mostrándose como tal.
+                    report.periodStart == report.periodEnd
+                        ? DateFormatter.longDate(report.periodStart, fallback: 'Sin fecha')
+                        : '${DateFormatter.shortDate(report.periodStart)} — '
+                            '${DateFormatter.shortDate(report.periodEnd)}',
                     style: AppTextStyles.bodyMedium.copyWith(
                       fontWeight: FontWeight.bold,
                       color: AppColors.doradoClaro,
@@ -236,24 +242,6 @@ class _ReportCard extends StatelessWidget {
                 color: AppColors.crema.withValues(alpha: 0.78),
               ),
             ),
-
-            if (!report.isDraft) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  _MiniFigure(label: 'Reuniones', value: '${report.meetingsHeld}'),
-                  const SizedBox(width: 8),
-                  _MiniFigure(
-                    label: 'Asistencia',
-                    value: report.averageAttendance == report.averageAttendance.roundToDouble()
-                        ? '${report.averageAttendance.round()}'
-                        : report.averageAttendance.toStringAsFixed(1),
-                  ),
-                  const SizedBox(width: 8),
-                  _MiniFigure(label: 'Nuevos', value: '${report.newMembers}'),
-                ],
-              ),
-            ],
 
             if (report.photoUrl != null) ...[
               const SizedBox(height: 12),
@@ -380,43 +368,6 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-class _MiniFigure extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _MiniFigure({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.deepTeal.withValues(alpha: 0.45),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.dorado,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              label,
-              style: AppTextStyles.labelSmall.copyWith(
-                color: AppColors.crema.withValues(alpha: 0.45),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// Redacción de un informe: qué pasó en el periodo y una foto de la célula.
 class _ReportFormSheet extends ConsumerStatefulWidget {
   final int cellId;
@@ -439,8 +390,14 @@ class _ReportFormSheetState extends ConsumerState<_ReportFormSheet> {
   late final TextEditingController _prayerNeeds;
   late final TextEditingController _photoCaption;
 
-  late DateTime _periodStart;
-  late DateTime _periodEnd;
+  /// Día del que se informa.
+  ///
+  /// El servidor guarda un periodo con principio y fin, que es lo que pedía el
+  /// formulario. Para el líder eso era un trámite de más: informa de un día
+  /// concreto, el de la reunión. Se elige una fecha y se envía como principio
+  /// y fin a la vez, así que ni el panel ni los informes ya entregados
+  /// cambian.
+  late DateTime _reportDate;
   String? _photoPath;
   bool _isSaving = false;
   String? _error;
@@ -455,10 +412,11 @@ class _ReportFormSheetState extends ConsumerState<_ReportFormSheet> {
     _prayerNeeds = TextEditingController(text: report?.prayerNeeds ?? '');
     _photoCaption = TextEditingController(text: report?.photoCaption ?? '');
 
-    final now = DateTime.now();
-    // Por omisión, el mes en curso: es el periodo que se informa casi siempre.
-    _periodStart = DateFormatter.parse(report?.periodStart) ?? DateTime(now.year, now.month, 1);
-    _periodEnd = DateFormatter.parse(report?.periodEnd) ?? now;
+    // Al redactar uno nuevo se propone hoy, que es cuando se suele escribir.
+    // Al corregir un borrador se recupera la fecha con la que se guardó.
+    _reportDate = DateFormatter.parse(report?.periodEnd) ??
+        DateFormatter.parse(report?.periodStart) ??
+        DateTime.now();
   }
 
   @override
@@ -481,24 +439,10 @@ class _ReportFormSheetState extends ConsumerState<_ReportFormSheet> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _DateField(
-                    label: 'Desde',
-                    date: _periodStart,
-                    onPick: (picked) => setState(() => _periodStart = picked),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _DateField(
-                    label: 'Hasta',
-                    date: _periodEnd,
-                    onPick: (picked) => setState(() => _periodEnd = picked),
-                  ),
-                ),
-              ],
+            _DateField(
+              label: 'Fecha del informe',
+              date: _reportDate,
+              onPick: (picked) => setState(() => _reportDate = picked),
             ),
             const SizedBox(height: 14),
             TextFormField(
@@ -626,22 +570,22 @@ class _ReportFormSheetState extends ConsumerState<_ReportFormSheet> {
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    if (_periodEnd.isBefore(_periodStart)) {
-      setState(() => _error = 'La fecha final del periodo no puede ser anterior a la inicial.');
-      return;
-    }
-
     setState(() {
       _isSaving = true;
       _error = null;
     });
 
+    // Un solo día: se manda como principio y fin del periodo, que es lo que
+    // el servidor guarda. Ya no hay dos fechas que puedan quedar del revés,
+    // así que tampoco hace falta comprobarlo.
+    final fecha = _isoDate(_reportDate);
+
     try {
       await ref.read(leaderRepositoryProvider).saveReport(
             cellId: widget.cellId,
             reportId: widget.report?.id,
-            periodStart: _isoDate(_periodStart),
-            periodEnd: _isoDate(_periodEnd),
+            periodStart: fecha,
+            periodEnd: fecha,
             summary: _summary.text,
             highlights: _highlights.text,
             challenges: _challenges.text,
@@ -678,8 +622,9 @@ class _DateField extends StatelessWidget {
           context: context,
           initialDate: date,
           firstDate: DateTime(DateTime.now().year - 2),
-          lastDate: DateTime(DateTime.now().year + 1, 12, 31),
-          helpText: label == 'Desde' ? 'Inicio del periodo' : 'Fin del periodo',
+          // No se informa del futuro: se cuenta lo que ya pasó.
+          lastDate: DateTime.now(),
+          helpText: label,
         );
         if (picked != null) onPick(picked);
       },
@@ -687,7 +632,8 @@ class _DateField extends StatelessWidget {
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: const Icon(Icons.date_range_outlined, color: AppColors.dorado, size: 19),
+          prefixIcon:
+              const Icon(Icons.calendar_today_outlined, color: AppColors.dorado, size: 19),
         ),
         child: Text(
           '${date.day.toString().padLeft(2, '0')}/'

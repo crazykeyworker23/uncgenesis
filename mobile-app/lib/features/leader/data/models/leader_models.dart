@@ -326,9 +326,6 @@ class CellReport {
   final String prayerNeeds;
   final String? photoUrl;
   final String photoCaption;
-  final int meetingsHeld;
-  final double averageAttendance;
-  final int newMembers;
   final String status;
   final String statusDisplay;
   final String? sentAt;
@@ -348,9 +345,6 @@ class CellReport {
     this.prayerNeeds = '',
     this.photoUrl,
     this.photoCaption = '',
-    this.meetingsHeld = 0,
-    this.averageAttendance = 0,
-    this.newMembers = 0,
     this.status = CellReportStatus.draft,
     this.statusDisplay = 'Borrador',
     this.sentAt,
@@ -373,9 +367,6 @@ class CellReport {
       prayerNeeds: json['prayer_needs'] as String? ?? '',
       photoUrl: _text(json['photo_url']),
       photoCaption: json['photo_caption'] as String? ?? '',
-      meetingsHeld: _int(json['meetings_held']),
-      averageAttendance: _double(json['average_attendance']),
-      newMembers: _int(json['new_members']),
       status: status,
       statusDisplay: json['status_display'] as String? ?? CellReportStatus.label(status),
       sentAt: _text(json['sent_at']),

@@ -956,14 +956,10 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
                 </span>
               </div>
 
-              {report.status !== 'DRAFT' && (
-                <div className="grid grid-cols-3 gap-2">
-                  <MiniStat label="Reuniones" value={report.meetings_held} />
-                  <MiniStat label="Asistencia media" value={report.average_attendance} />
-                  <MiniStat label="Nuevos" value={report.new_members} />
-                </div>
-              )}
-
+              {/* El informe ya no lleva cifras adjuntas: no las leía nadie y,
+                  desde que se informa de un solo día, salían casi siempre en
+                  cero. Los indicadores vivos están en la pestaña de
+                  estadísticas de la célula. */}
               <div className="space-y-2 text-[11px] leading-relaxed">
                 <Block title="Resumen" text={report.summary} />
                 <Block title="Lo destacado" text={report.highlights} />
@@ -1080,15 +1076,6 @@ function Block({ title, text }: { title: string; text: string }) {
     <div>
       <p className="text-[10px] font-bold text-dorado uppercase tracking-wide">{title}</p>
       <p className="text-crema text-opacity-75 mt-0.5 whitespace-pre-line">{text}</p>
-    </div>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="p-2.5 rounded-xl bg-deep-teal bg-opacity-40 border border-white border-opacity-5 text-center">
-      <p className="text-[9px] text-crema text-opacity-45 uppercase tracking-wide">{label}</p>
-      <p className="text-base font-extrabold text-dorado">{value}</p>
     </div>
   );
 }

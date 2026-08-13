@@ -203,7 +203,14 @@ class CellReport(models.Model):
     photo = models.ImageField(upload_to='cell_reports/', blank=True, null=True)
     photo_caption = models.CharField(max_length=255, blank=True, verbose_name='pie de foto')
 
-    # Cifras del periodo, congeladas al enviar el informe.
+    # Cifras que se congelaban al enviar el informe. Ya no se calculan ni se
+    # muestran: no las leía nadie, y desde que el informe es de un solo día
+    # salían casi siempre en cero, que junto a un texto que cuenta una buena
+    # reunión engaña más de lo que informa. Los indicadores vivos están en
+    # /cells/<id>/statistics/.
+    #
+    # Las columnas se conservan para no borrar lo que guardan los informes
+    # entregados antes del cambio.
     meetings_held = models.PositiveIntegerField(default=0)
     average_attendance = models.FloatField(default=0)
     new_members = models.PositiveIntegerField(default=0)

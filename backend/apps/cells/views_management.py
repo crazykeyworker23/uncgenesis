@@ -295,21 +295,18 @@ class CellReportViewSet(ScopedCellResourceMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        meetings = report.cell.meetings.filter(
-            date__gte=report.period_start, date__lte=report.period_end
-        )
-        meetings_held = meetings.count()
-        attended = Attendance.objects.filter(
-            meeting__in=meetings,
-            status__in=[AttendanceStatus.PRESENT, AttendanceStatus.LATE],
-        ).count()
-
-        report.meetings_held = meetings_held
-        report.average_attendance = round(attended / meetings_held, 1) if meetings_held else 0
-        report.new_members = report.cell.members.filter(
-            created_at__date__gte=report.period_start,
-            created_at__date__lte=report.period_end,
-        ).count()
+        # Ya no se congelan cifras junto al informe.
+        #
+        # Se calculaban tres —reuniones, asistencia media y altas— sobre el
+        # periodo del informe, y no las leía nadie salvo quien lo abría. Desde
+        # que el líder informa de un solo día, además, salían casi siempre en
+        # cero: la fecha que elige es la del día que escribe, no la de una
+        # reunión registrada. Cifras en cero junto a un texto que cuenta una
+        # buena reunión engañan más de lo que informan.
+        #
+        # Los indicadores de verdad están en /cells/<id>/statistics/, se
+        # calculan al momento y no se quedan viejos. Las columnas se conservan
+        # para no borrar lo que guardan los informes ya entregados.
         report.status = CellReportStatus.SENT
         report.sent_at = timezone.now()
         report.submitted_by = report.submitted_by or request.user
