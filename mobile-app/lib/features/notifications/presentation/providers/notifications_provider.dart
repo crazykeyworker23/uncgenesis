@@ -16,6 +16,12 @@ class LocalNotification {
   final String receivedAt;
   final bool isRead;
 
+  /// Pantalla que abre el aviso al tocarlo, si apunta a alguna.
+  ///
+  /// Vacío en un comunicado suelto, que no habla de nada concreto: ése lleva
+  /// al propio listado.
+  final String deepLink;
+
   /// `true` cuando el aviso lo escribió la propia persona que lo está viendo.
   ///
   /// El líder manda recordatorios a su célula y no los recibe en el teléfono,
@@ -30,6 +36,7 @@ class LocalNotification {
     required this.receivedAt,
     this.isRead = false,
     this.sentByMe = false,
+    this.deepLink = '',
   });
 
   LocalNotification copyWith({
@@ -39,6 +46,7 @@ class LocalNotification {
     String? receivedAt,
     bool? isRead,
     bool? sentByMe,
+    String? deepLink,
   }) {
     return LocalNotification(
       id: id ?? this.id,
@@ -47,6 +55,7 @@ class LocalNotification {
       receivedAt: receivedAt ?? this.receivedAt,
       isRead: isRead ?? this.isRead,
       sentByMe: sentByMe ?? this.sentByMe,
+      deepLink: deepLink ?? this.deepLink,
     );
   }
 
@@ -57,6 +66,7 @@ class LocalNotification {
         'receivedAt': receivedAt,
         'isRead': isRead,
         'sentByMe': sentByMe,
+        'deepLink': deepLink,
       };
 
   factory LocalNotification.fromJson(Map<String, dynamic> json) => LocalNotification(
@@ -66,6 +76,7 @@ class LocalNotification {
         receivedAt: json['receivedAt'],
         isRead: json['isRead'] ?? false,
         sentByMe: json['sentByMe'] ?? false,
+        deepLink: json['deepLink'] ?? '',
       );
 }
 
@@ -219,6 +230,7 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
             receivedAt: created,
             isRead: readIds.contains(id),
             sentByMe: sentByMe,
+            deepLink: item['deep_link']?.toString() ?? '',
           );
 
           // Lo propio no vuelve a sonar. El servidor ya no le manda al autor
@@ -241,6 +253,7 @@ class LocalNotificationsNotifier extends StateNotifier<List<LocalNotification>> 
           NotificationService().showSystemNotification(
             newestNotification.title,
             newestNotification.body,
+            deepLink: newestNotification.deepLink,
           );
 
           // Se usa la clave del navegador realmente montado por la app; la

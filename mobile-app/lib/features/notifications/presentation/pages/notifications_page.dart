@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/notifications/notification_service.dart';
 import '../../../../core/providers/core_providers.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../app/theme/app_colors.dart';
@@ -206,6 +207,10 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
                         borderRadius: BorderRadius.circular(20),
                         onTap: () {
                           ref.read(localNotificationsProvider.notifier).markAsRead(notif.id);
+                          // Y se abre lo que el aviso anuncia. Antes sólo se
+                          // marcaba como leído: había que buscar a mano el
+                          // devocional o la célula de la que hablaba.
+                          NotificationService().openDeepLink(notif.deepLink);
                         },
                         child: Padding(
                           padding: const EdgeInsets.all(18.0),

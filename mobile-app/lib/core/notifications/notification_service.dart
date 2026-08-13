@@ -78,7 +78,12 @@ class NotificationService {
     try {
       const androidSettings = AndroidInitializationSettings('@drawable/ic_notification');
       const initSettings = InitializationSettings(android: androidSettings);
-      await _localNotificationsPlugin.initialize(initSettings);
+      await _localNotificationsPlugin.initialize(
+        initSettings,
+        // Los avisos que levanta la propia app no llevaban a ninguna parte:
+        // sólo la abrían. El destino viaja en el `payload`.
+        onDidReceiveNotificationResponse: (response) => openDeepLink(response.payload),
+      );
 
       // Sin este registro el canal no existe, y con la app cerrada Android
       // descartaba el aviso o lo mostraba en un canal silencioso de reserva:
@@ -91,7 +96,7 @@ class NotificationService {
     }
   }
 
-  Future<void> showSystemNotification(String title, String body) async {
+  Future<void> showSystemNotification(String title, String body, {String? deepLink}) async {
     try {
       const androidDetails = AndroidNotificationDetails(
         'genesis_channel',
@@ -108,6 +113,7 @@ class NotificationService {
         title,
         body,
         notificationDetails,
+        payload: deepLink,
       );
     } catch (e) {
       debugPrint('Local notification show error: $e');
@@ -294,7 +300,7 @@ class NotificationService {
     final body = message.notification?.body ?? message.data['body'] ?? 'Tienes un nuevo mensaje.';
     saveToHistory(title, body);
     debugPrint("Tapped notification payload: ${message.data}");
-    _abrirDestino(message.data['deep_link'] as String?);
+    openDeepLink(message.data['deep_link'] as String?);
   }
 
   /// Rutas que un aviso puede abrir. Se comprueba contra esta lista para que un
@@ -308,7 +314,12 @@ class NotificationService {
     '/notifications',
   ];
 
-  Future<void> _abrirDestino(String? ruta) async {
+  /// Abre la pantalla que corresponde a un aviso.
+  ///
+  /// La usan los tres caminos por los que se puede tocar uno: el que llega por
+  /// Firebase, el que levanta la propia app y el listado de dentro. Así los
+  /// tres llevan al mismo sitio.
+  Future<void> openDeepLink(String? ruta) async {
     final destino = (ruta != null && ruta.isNotEmpty &&
             _destinosPermitidos.any((permitido) => ruta.startsWith(permitido)))
         ? ruta

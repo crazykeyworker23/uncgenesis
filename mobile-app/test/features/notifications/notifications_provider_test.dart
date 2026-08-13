@@ -61,6 +61,50 @@ void main() {
     });
   });
 
+  group('A dónde lleva un aviso', () {
+    test('el destino se guarda con el aviso', () {
+      // Sin esto, el listado sabía qué decía el aviso pero no de qué hablaba:
+      // tocarlo sólo lo marcaba como leído y había que buscar a mano el
+      // devocional o la célula.
+      final original = LocalNotification(
+        id: '1',
+        title: 'Devocional del día',
+        body: 'Hebreos 13',
+        receivedAt: '2026-08-12T07:00:00Z',
+        deepLink: '/devotionals/hebreos-13',
+      );
+
+      final revivido = LocalNotification.fromJson(
+        json.decode(json.encode(original.toJson())),
+      );
+
+      expect(revivido.deepLink, '/devotionals/hebreos-13');
+    });
+
+    test('un comunicado suelto no apunta a ninguna pantalla', () {
+      final aviso = LocalNotification(
+        id: '2',
+        title: 'Aviso general',
+        body: 'x',
+        receivedAt: '2026-08-12T07:00:00Z',
+      );
+
+      expect(aviso.deepLink, '');
+    });
+
+    test('un historial antiguo se lee sin destino, no se rompe', () {
+      final antigua = LocalNotification.fromJson({
+        'id': '9',
+        'title': 'De antes',
+        'body': 'x',
+        'receivedAt': '2026-08-01T10:00:00Z',
+        'isRead': false,
+      });
+
+      expect(antigua.deepLink, '');
+    });
+  });
+
   group('Contador de avisos sin leer', () {
     test('no cuenta lo que uno mismo envió', () async {
       // El líder manda un recordatorio a su célula: aparece en su listado como
