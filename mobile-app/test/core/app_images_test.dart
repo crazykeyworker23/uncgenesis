@@ -47,7 +47,7 @@ void main() {
 
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: AppBackground('assets/images/splash_bg.png')),
+          home: Scaffold(body: AppBackground('assets/images/worship_bg.png')),
         ),
       );
 
@@ -59,7 +59,7 @@ void main() {
       // letra— obliga a recomponer la imagen entera.
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: AppBackground('assets/images/splash_bg.png')),
+          home: Scaffold(body: AppBackground('assets/images/worship_bg.png')),
         ),
       );
 
@@ -78,7 +78,7 @@ void main() {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
-            body: AppBackground('assets/images/splash_bg.png', overlay: velo),
+            body: AppBackground('assets/images/worship_bg.png', overlay: velo),
           ),
         ),
       );
@@ -96,7 +96,7 @@ void main() {
     testWidgets('sin velo no se pinta una capa de más', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(body: AppBackground('assets/images/splash_bg.png')),
+          home: Scaffold(body: AppBackground('assets/images/worship_bg.png')),
         ),
       );
 

@@ -432,8 +432,12 @@ class LeaderFormSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final viewInsets = MediaQuery.of(context).viewInsets.bottom;
-    final maxHeight = MediaQuery.of(context).size.height * 0.9;
+    // Cada medida por su lado. Con `MediaQuery.of` se despierta por cualquier
+    // cambio, y el hueco del teclado se anima: la hoja entera se reconstruía
+    // en cada fotograma. El contenido llega hecho desde fuera, así que aun así
+    // Flutter reutiliza su rama; lo que se evita es rehacer el resto.
+    final viewInsets = MediaQuery.viewInsetsOf(context).bottom;
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.9;
 
     return Container(
       constraints: BoxConstraints(maxHeight: maxHeight),

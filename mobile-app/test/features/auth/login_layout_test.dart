@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genesis_app/core/providers/core_providers.dart';
+import 'package:genesis_app/core/widgets/app_images.dart';
 import 'package:genesis_app/features/auth/presentation/pages/login_page.dart';
 import 'package:go_router/go_router.dart';
 
@@ -52,6 +53,39 @@ void main() {
 
       expect(tester.getTopLeft(find.text('Iniciar sesión')), antes);
       expect(tester.getTopLeft(find.text('Correo electrónico')), correoAntes);
+    });
+
+    testWidgets('no carga ninguna foto de fondo', (tester) async {
+      // El fondo era la captura de un teléfono de muestra, con su marco, un
+      // reloj falso y un «Cargando…» que se colaban detrás del formulario. Y
+      // costaba 10 MB de memoria en una pantalla que sólo sirve para escribir.
+      await tester.pumpWidget(_loginHarness());
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppBackground), findsNothing);
+      expect(find.byType(AppGradientBackground), findsOneWidget);
+      // La única imagen que queda es el logotipo de la cabecera.
+      expect(find.byType(Image), findsOneWidget);
+    });
+
+    testWidgets('el hueco para desplazarse lo aporta una caja aparte', (tester) async {
+      // Es el detalle que quita el atasco: el alto del teclado se pide en un
+      // widget suyo al final del scroll, no en el `padding` que envuelve al
+      // formulario. Así lo único que se rehace mientras sube el teclado es una
+      // caja vacía.
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(400, 800);
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(_loginHarness());
+      await tester.pumpAndSettle();
+
+      expect(find.byWidgetPredicate((w) => w is SizedBox && w.height == 400), findsNothing);
+
+      tester.view.viewInsets = const FakeViewPadding(bottom: 400);
+      await tester.pumpAndSettle();
+
+      expect(find.byWidgetPredicate((w) => w is SizedBox && w.height == 400), findsOneWidget);
     });
 
     testWidgets('con el teclado abierto se puede desplazar hasta el pie', (tester) async {

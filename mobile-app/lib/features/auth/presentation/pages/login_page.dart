@@ -64,29 +64,31 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     final isLoading = state.maybeWhen(loading: () => true, orElse: () => false);
 
-    // Alto útil de la pantalla, descontando barra de estado y de navegación y
-    // el margen del formulario.
+    // Alto útil de la pantalla, descontando las barras del sistema y el margen
+    // del formulario. Sale de `size`, que no cambia al abrir el teclado:
+    // medirlo contra el hueco libre es lo que hacía saltar el formulario.
     //
-    // Se saca de `size`, que no cambia al abrir el teclado. Medir contra el
-    // hueco que queda libre es justo lo que hacía saltar el formulario.
-    final media = MediaQuery.of(context);
-    final availableHeight = media.size.height - media.padding.vertical - 32.0;
+    // Se piden sólo las medidas que hacen falta, y no el `MediaQuery` entero.
+    // `MediaQuery.of` suscribe a *todos* sus cambios, y uno de ellos es el
+    // hueco del teclado, que se anima fotograma a fotograma: la pantalla de
+    // acceso completa se reconstruía unas sesenta veces por segundo mientras
+    // el teclado subía. Eso era el atasco al tocar un campo. `sizeOf` y
+    // `paddingOf` sólo despiertan si cambia lo suyo, que aquí no cambia nunca.
+    final screenSize = MediaQuery.sizeOf(context);
+    final safePadding = MediaQuery.paddingOf(context);
+    final availableHeight = screenSize.height - safePadding.vertical - 32.0;
 
-    // El fondo se queda quieto: vive fuera del `Scaffold` y en su propia capa.
+    // Esta pantalla es para escribir, así que el fondo no lleva fotografía.
     //
-    // Al tocar un campo se abre el teclado y el cuerpo del Scaffold se encoge
-    // para dejarle sitio. Con la imagen dentro, esos 10 MB se reescalaban en
-    // cada fotograma de la animación. Y con el velo oscuro suelto, encima
-    // había que volver a mezclarlo a pantalla completa otras tantas veces.
-    // Ahora foto y velo son una sola capa que nadie toca, y el formulario va
-    // en la suya: el teclado sólo mueve el formulario.
+    // Antes había una a pantalla completa: 10 MB que decodificar y, al abrir
+    // el teclado, reescalar y volver a mezclar con su velo oscuro en cada
+    // fotograma. Y encima era la captura de un teléfono de muestra —con su
+    // marco, su reloj falso y la palabra «Cargando…»—, que se colaba detrás
+    // del formulario. Un degradado lo dibuja la tarjeta gráfica sin coste.
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Base opaca: la daba el `Scaffold` cuando el fondo vivía dentro. Si
-        // la foto no cargara, detrás no puede quedar el vacío.
-        const ColoredBox(color: AppColors.darkGreen),
-        AppBackground('assets/images/splash_bg.png', overlay: AppColors.darkGreen.withValues(alpha: 0.65)),
+        const AppGradientBackground(),
 
         RepaintBoundary(
           child: Scaffold(
@@ -107,269 +109,282 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     // Se puede arrastrar aunque el contenido quepa: es lo que
                     // permite alcanzar lo último cuando el teclado tapa el pie.
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.only(
-                      left: 24.0,
-                      right: 24.0,
-                      top: 16.0,
-                      // Hueco por debajo, del alto del teclado, para poder
-                      // desplazarse hasta lo que quede tapado. Va aquí abajo,
-                      // así que no mueve nada de lo que ya está en pantalla.
-                      bottom: 16.0 + MediaQuery.viewInsetsOf(context).bottom,
-                    ),
-                    child: ConstrainedBox(
-                      // Se centra contra el alto de la pantalla, que no cambia,
-                      // y no contra el hueco que deja el teclado.
-                      constraints: BoxConstraints(minHeight: availableHeight),
-                      child: Form(
-                        key: _formKey,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // Header logo + text
-                            Row(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // El hueco del teclado se añade abajo del todo, en un
+                        // widget suyo (ver más adelante). Antes se pedía aquí,
+                        // en el `padding`, y como el valor se anima, arrastraba
+                        // a reconstruirse a todo lo que cuelga de este scroll:
+                        // el formulario entero, en cada fotograma.
+                        ConstrainedBox(
+                          // Se centra contra el alto de la pantalla, que no
+                          // cambia, y no contra el hueco que deja el teclado.
+                          constraints: BoxConstraints(minHeight: availableHeight),
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                const AppLogo(size: 38),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'GÉNESIS APP',
-                                  style: AppTextStyles.titleMedium.copyWith(
-                                    letterSpacing: 2.0,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 48),
-
-                            // Cursive Titles: Accede a Génesis
-                            Center(
-                              child: RichText(
-                                textAlign: TextAlign.center,
-                                text: const TextSpan(
-                                  style: TextStyle(
-                                    fontFamily: 'cursive',
-                                    fontSize: 38,
-                                    fontStyle: FontStyle.italic,
-                                    color: AppColors.white,
-                                    height: 1.15,
-                                  ),
+                                // Header logo + text
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    TextSpan(
-                                      text: 'Accede a\n',
-                                      style: TextStyle(color: AppColors.doradoClaro),
-                                    ),
-                                    TextSpan(
-                                      text: 'Génesis',
-                                      style: TextStyle(fontWeight: FontWeight.bold),
+                                    const AppLogo(size: 38),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'GÉNESIS APP',
+                                      style: AppTextStyles.titleMedium.copyWith(
+                                        letterSpacing: 2.0,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.white,
+                                      ),
                                     ),
                                   ],
                                 ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
+                                const SizedBox(height: 48),
 
-                            // Subtitle: Bienvenido de nuevo
-                            Center(
-                              child: Text(
-                                'Bienvenido de nuevo ♡',
-                                style: AppTextStyles.bodyMedium.copyWith(
-                                  color: AppColors.crema.withValues(alpha: 0.7),
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 36),
-
-                            // Email input field
-                            TextFormField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              enabled: !isLoading,
-                              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-                              decoration: InputDecoration(
-                                hintText: 'Correo electrónico',
-                                hintStyle: TextStyle(color: AppColors.crema.withValues(alpha: 0.4)),
-                                prefixIcon: const Icon(Icons.email_outlined, color: AppColors.dorado),
-                                filled: true,
-                                fillColor: AppColors.deepTeal.withValues(alpha: 0.4),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: BorderSide(color: AppColors.dorado.withValues(alpha: 0.15)),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: const BorderSide(color: AppColors.dorado, width: 1.5),
-                                ),
-                                errorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: const BorderSide(color: AppColors.error, width: 1.5),
-                                ),
-                                focusedErrorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: const BorderSide(color: AppColors.error, width: 1.5),
-                                ),
-                              ),
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'Ingresa tu correo';
-                                }
-                                if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
-                                  return 'Ingresa un correo válido';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Password input field
-                            TextFormField(
-                              controller: _passwordController,
-                              obscureText: _obscurePassword,
-                              enabled: !isLoading,
-                              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
-                              decoration: InputDecoration(
-                                hintText: 'Contraseña',
-                                hintStyle: TextStyle(color: AppColors.crema.withValues(alpha: 0.4)),
-                                prefixIcon: const Icon(Icons.lock_outline, color: AppColors.dorado),
-                                suffixIcon: IconButton(
-                                  tooltip: _obscurePassword ? 'Mostrar contraseña' : 'Ocultar contraseña',
-                                  icon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_off_outlined
-                                        : Icons.visibility_outlined,
-                                    color: AppColors.crema.withValues(alpha: 0.5),
-                                  ),
-                                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                                ),
-                                filled: true,
-                                fillColor: AppColors.deepTeal.withValues(alpha: 0.4),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: BorderSide(color: AppColors.dorado.withValues(alpha: 0.15)),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: const BorderSide(color: AppColors.dorado, width: 1.5),
-                                ),
-                                errorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: const BorderSide(color: AppColors.error, width: 1.5),
-                                ),
-                                focusedErrorBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  borderSide: const BorderSide(color: AppColors.error, width: 1.5),
-                                ),
-                              ),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Ingresa tu contraseña';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 8),
-
-                            // Forgot password
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton(
-                                onPressed: isLoading ? null : () => context.push('/auth/forgot-password'),
-                                style: TextButton.styleFrom(foregroundColor: AppColors.doradoClaro),
-                                child: const Text(
-                                  'Olvidé mi contraseña',
-                                  style: TextStyle(fontSize: 13, decoration: TextDecoration.underline),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-
-                            // Iniciar Sesion Button
-                            ElevatedButton(
-                              onPressed: isLoading ? null : _submit,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.dorado,
-                                foregroundColor: AppColors.deepTeal,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                                elevation: 0,
-                              ),
-                              child: isLoading
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: AppColors.deepTeal,
+                                // Cursive Titles: Accede a Génesis
+                                Center(
+                                  child: RichText(
+                                    textAlign: TextAlign.center,
+                                    text: const TextSpan(
+                                      style: TextStyle(
+                                        fontFamily: 'cursive',
+                                        fontSize: 38,
+                                        fontStyle: FontStyle.italic,
+                                        color: AppColors.white,
+                                        height: 1.15,
                                       ),
-                                    )
-                                  : const Text(
-                                      'Iniciar sesión',
-                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                                    ),
-                            ),
-                            const SizedBox(height: 16),
-
-                            // Crear cuenta Button
-                            OutlinedButton(
-                              onPressed: isLoading ? null : () => context.push('/auth/register'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.dorado,
-                                side: const BorderSide(color: AppColors.dorado, width: 1.5),
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                              ),
-                              child: const Text(
-                                'Crear cuenta',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-
-                            // Continuation line divider with indicator circle
-                            Row(
-                              children: [
-                                Expanded(child: Divider(color: AppColors.dorado.withValues(alpha: 0.15))),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  child: Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: AppColors.dorado, width: 1.5),
+                                      children: [
+                                        TextSpan(
+                                          text: 'Accede a\n',
+                                          style: TextStyle(color: AppColors.doradoClaro),
+                                        ),
+                                        TextSpan(
+                                          text: 'Génesis',
+                                          style: TextStyle(fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
-                                Expanded(child: Divider(color: AppColors.dorado.withValues(alpha: 0.15))),
+                                const SizedBox(height: 8),
+
+                                // Subtitle: Bienvenido de nuevo
+                                Center(
+                                  child: Text(
+                                    'Bienvenido de nuevo ♡',
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      color: AppColors.crema.withValues(alpha: 0.7),
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 36),
+
+                                // Email input field
+                                TextFormField(
+                                  controller: _emailController,
+                                  keyboardType: TextInputType.emailAddress,
+                                  enabled: !isLoading,
+                                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+                                  decoration: InputDecoration(
+                                    hintText: 'Correo electrónico',
+                                    hintStyle: TextStyle(color: AppColors.crema.withValues(alpha: 0.4)),
+                                    prefixIcon: const Icon(Icons.email_outlined, color: AppColors.dorado),
+                                    filled: true,
+                                    fillColor: AppColors.deepTeal.withValues(alpha: 0.4),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(color: AppColors.dorado.withValues(alpha: 0.15)),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: const BorderSide(color: AppColors.dorado, width: 1.5),
+                                    ),
+                                    errorBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+                                    ),
+                                    focusedErrorBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+                                    ),
+                                  ),
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return 'Ingresa tu correo';
+                                    }
+                                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
+                                      return 'Ingresa un correo válido';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+
+                                // Password input field
+                                TextFormField(
+                                  controller: _passwordController,
+                                  obscureText: _obscurePassword,
+                                  enabled: !isLoading,
+                                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.white),
+                                  decoration: InputDecoration(
+                                    hintText: 'Contraseña',
+                                    hintStyle: TextStyle(color: AppColors.crema.withValues(alpha: 0.4)),
+                                    prefixIcon: const Icon(Icons.lock_outline, color: AppColors.dorado),
+                                    suffixIcon: IconButton(
+                                      tooltip: _obscurePassword ? 'Mostrar contraseña' : 'Ocultar contraseña',
+                                      icon: Icon(
+                                        _obscurePassword
+                                            ? Icons.visibility_off_outlined
+                                            : Icons.visibility_outlined,
+                                        color: AppColors.crema.withValues(alpha: 0.5),
+                                      ),
+                                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                    ),
+                                    filled: true,
+                                    fillColor: AppColors.deepTeal.withValues(alpha: 0.4),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: BorderSide(color: AppColors.dorado.withValues(alpha: 0.15)),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: const BorderSide(color: AppColors.dorado, width: 1.5),
+                                    ),
+                                    errorBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+                                    ),
+                                    focusedErrorBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+                                    ),
+                                  ),
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Ingresa tu contraseña';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 8),
+
+                                // Forgot password
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed: isLoading ? null : () => context.push('/auth/forgot-password'),
+                                    style: TextButton.styleFrom(foregroundColor: AppColors.doradoClaro),
+                                    child: const Text(
+                                      'Olvidé mi contraseña',
+                                      style: TextStyle(fontSize: 13, decoration: TextDecoration.underline),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+
+                                // Iniciar Sesion Button
+                                ElevatedButton(
+                                  onPressed: isLoading ? null : _submit,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.dorado,
+                                    foregroundColor: AppColors.deepTeal,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                                    elevation: 0,
+                                  ),
+                                  child: isLoading
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppColors.deepTeal,
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Iniciar sesión',
+                                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                        ),
+                                ),
+                                const SizedBox(height: 16),
+
+                                // Crear cuenta Button
+                                OutlinedButton(
+                                  onPressed: isLoading ? null : () => context.push('/auth/register'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.dorado,
+                                    side: const BorderSide(color: AppColors.dorado, width: 1.5),
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                                  ),
+                                  child: const Text(
+                                    'Crear cuenta',
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+
+                                // Continuation line divider with indicator circle
+                                Row(
+                                  children: [
+                                    Expanded(child: Divider(color: AppColors.dorado.withValues(alpha: 0.15))),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: AppColors.dorado, width: 1.5),
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(child: Divider(color: AppColors.dorado.withValues(alpha: 0.15))),
+                                  ],
+                                ),
+                                const SizedBox(height: 24),
+
+                                // Continue as guest
+                                Center(
+                                  child: TextButton.icon(
+                                    onPressed: isLoading
+                                        ? null
+                                        : () => ref.read(authProvider.notifier).loginAsGuest(),
+                                    icon: const Icon(Icons.person_outline, size: 20),
+                                    label: const Text(
+                                      'Continuar como invitado',
+                                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                    ),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: AppColors.crema.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
-                            const SizedBox(height: 24),
-
-                            // Continue as guest
-                            Center(
-                              child: TextButton.icon(
-                                onPressed: isLoading
-                                    ? null
-                                    : () => ref.read(authProvider.notifier).loginAsGuest(),
-                                icon: const Icon(Icons.person_outline, size: 20),
-                                label: const Text(
-                                  'Continuar como invitado',
-                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                                ),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: AppColors.crema.withValues(alpha: 0.7),
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
+
+                        // Hueco del alto del teclado, para poder desplazarse
+                        // hasta lo que quede tapado.
+                        //
+                        // Va en su propio widget: es el único valor que se
+                        // anima, así que al aparecer el teclado se reconstruye
+                        // esta caja vacía y nada más. El formulario ni se
+                        // entera.
+                        Builder(
+                          builder: (context) => SizedBox(height: MediaQuery.viewInsetsOf(context).bottom),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -378,7 +393,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 // no había forma visible de regresar sin cerrar la app.
                 if (context.canPop())
                   Positioned(
-                    top: MediaQuery.of(context).padding.top + 4,
+                    top: safePadding.top + 4,
                     left: 4,
                     child: IconButton(
                       icon: const Icon(Icons.arrow_back, color: AppColors.crema),

@@ -43,7 +43,11 @@ class AppBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
+    // Sólo lo que se necesita. `MediaQuery.of` suscribe a todos sus cambios,
+    // incluido el hueco del teclado, que se anima: el fondo se reconstruía en
+    // cada fotograma de esa animación aunque no dependa de él para nada.
+    final size = MediaQuery.sizeOf(context);
+    final ratio = MediaQuery.devicePixelRatioOf(context);
 
     return RepaintBoundary(
       child: Stack(
@@ -57,7 +61,7 @@ class AppBackground extends StatelessWidget {
             height: double.infinity,
             // Se decodifica al ancho real de la pantalla. En un teléfono de
             // 720 puntos de ancho son 4,5 MB en vez de 10.
-            cacheWidth: (media.size.width * media.devicePixelRatio).round(),
+            cacheWidth: (size.width * ratio).round(),
             // El fondo es decorativo: si faltara, basta el color de la
             // pantalla que hay debajo.
             errorBuilder: (_, __, ___) => const SizedBox.shrink(),
@@ -65,6 +69,32 @@ class AppBackground extends StatelessWidget {
           if (overlay != null) ColoredBox(color: overlay!),
         ],
       ),
+    );
+  }
+}
+
+/// Fondo de degradado, sin fotografía.
+///
+/// Para las pantallas en las que lo que se hace es escribir. Una foto a
+/// pantalla completa ahí sólo cuesta: hay que decodificarla, ocupa memoria y
+/// se vuelve a componer cada vez que algo cambia por delante. Un degradado lo
+/// resuelve la tarjeta gráfica prácticamente gratis, y con el velo oscuro que
+/// hacía falta para leer el texto encima, la foto casi no se distinguía.
+class AppGradientBackground extends StatelessWidget {
+  const AppGradientBackground({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [AppColors.darkTeal, AppColors.deepTeal, AppColors.darkGreen],
+          stops: [0.0, 0.55, 1.0],
+        ),
+      ),
+      child: SizedBox.expand(),
     );
   }
 }
@@ -81,7 +111,7 @@ class AppLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ratio = MediaQuery.of(context).devicePixelRatio;
+    final ratio = MediaQuery.devicePixelRatioOf(context);
 
     return Image.asset(
       'assets/logos/logo.png',

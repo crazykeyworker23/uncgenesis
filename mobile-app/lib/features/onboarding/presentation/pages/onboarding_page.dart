@@ -30,9 +30,13 @@ class _OnboardingPageState extends State<OnboardingPage> {
         children: [
           // Fondo y velo oscuro en una sola capa: sueltos, cada repintado del
           // contenido obliga a volver a mezclar el velo a pantalla completa.
+          //
+          // La foto es la del culto. Antes se usaba `splash_bg.png`, que no es
+          // una foto sino la captura de un teléfono de muestra: se veía su
+          // marco, un reloj falso y un «Cargando…» detrás del contenido real.
           Positioned.fill(
             child: AppBackground(
-              'assets/images/splash_bg.png',
+              'assets/images/worship_bg.png',
               overlay: AppColors.darkGreen.withValues(alpha: 0.65),
             ),
           ),
