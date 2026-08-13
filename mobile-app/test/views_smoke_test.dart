@@ -160,7 +160,9 @@ class MockAdapter implements HttpClientAdapter {
     } else if (path.contains('/events/')) {
       responseString = '{"results":[],"count":0}';
     } else if (path.contains('/services/')) {
-      responseString = '{"results":[],"count":0}';
+      responseString = '{"count":1,"next":null,"results":[{"id":3,'
+          '"title":"Culto del domingo","slug":"culto-domingo","date":"2026-08-02",'
+          '"sermon_notes":"","views_count":0,"is_live":false,"status":"PUBLISHED"}]}';
     } else if (path.contains('/devotionals/')) {
       responseString = '{"results":[],"count":0}';
     } else if (path.contains('/publications/categories/')) {
@@ -443,6 +445,36 @@ void main() {
       await settleRequests(tester);
 
       expect(find.text('Células de la iglesia'), findsNothing);
+    });
+  });
+
+  group('Publicaciones y servicios', () {
+    testWidgets('el filtro «Servicios» muestra los cultos de verdad', (tester) async {
+      // «Servicios» buscaba publicaciones etiquetadas como «Servicio
+      // realizado», que es otra cosa: los cultos con su vídeo y sus notas
+      // viven aparte, así que ahí no salía nada y había que cambiar de
+      // sección para verlos.
+      await tester.pumpWidget(createTestWidget(const PublicationsPage()));
+      await settleRequests(tester);
+
+      expect(find.text('Culto del domingo'), findsNothing);
+
+      await tester.tap(find.text('Servicios'));
+      await settleRequests(tester);
+
+      expect(find.text('Culto del domingo'), findsOneWidget);
+      expect(find.text('Últimos servicios'), findsOneWidget);
+    });
+
+    testWidgets('la fecha del servicio se lee, no sale en crudo', (tester) async {
+      await tester.pumpWidget(createTestWidget(const PublicationsPage()));
+      await settleRequests(tester);
+
+      await tester.tap(find.text('Servicios'));
+      await settleRequests(tester);
+
+      expect(find.text('Domingo 2 de agosto'), findsOneWidget);
+      expect(find.text('2026-08-02'), findsNothing);
     });
   });
 

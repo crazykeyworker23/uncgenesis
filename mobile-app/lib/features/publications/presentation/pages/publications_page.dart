@@ -9,6 +9,8 @@ import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/utils/date_formatter.dart';
 import '../../../../core/widgets/app_images.dart';
 import '../../../notifications/presentation/providers/notifications_provider.dart';
+import '../../../services/presentation/providers/services_provider.dart';
+import '../../../services/presentation/widgets/service_card.dart';
 import '../providers/publications_provider.dart';
 import '../../data/models/publication_model.dart';
 
@@ -45,7 +47,12 @@ class _PublicationsPageState extends ConsumerState<PublicationsPage> {
     final currentScroll = _scrollController.position.pixels;
     if (maxScroll > 0 && currentScroll > 0 && currentScroll >= maxScroll - 50) {
       Future.microtask(() {
-        if (mounted) {
+        if (!mounted) return;
+        // El feed muestra servicios cuando ese filtro está activo, así que al
+        // llegar al final hay que pedir más de lo que se está viendo.
+        if (ref.read(publicationsProvider).selectedContentType == 'SERVICE') {
+          ref.read(servicesProvider.notifier).loadNextPage();
+        } else {
           ref.read(publicationsProvider.notifier).loadNextPage();
         }
       });
@@ -58,6 +65,14 @@ class _PublicationsPageState extends ConsumerState<PublicationsPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(publicationsProvider);
     final unreadCount = ref.watch(unreadNotificationsCountProvider);
+
+    // «Servicios» no es una etiqueta de publicación: son los cultos, con su
+    // vídeo, su audio y las notas de la prédica, y viven en otro sitio. El
+    // filtro buscaba publicaciones marcadas como «Servicio realizado», que casi
+    // nunca hay ninguna, así que aquí no salía nada y había que irse a la
+    // sección de Servicios para verlos.
+    final showingServices = state.selectedContentType == 'SERVICE';
+    final services = ref.watch(servicesProvider);
 
     final contentTypes = [
       {'label': 'Todas', 'value': 'ALL'},
@@ -196,6 +211,10 @@ class _PublicationsPageState extends ConsumerState<PublicationsPage> {
             Expanded(
               child: RefreshIndicator(
                 onRefresh: () async {
+                  if (showingServices) {
+                    await ref.read(servicesProvider.notifier).refresh();
+                    return;
+                  }
                   ref.read(publicationsProvider.notifier).setSearchQuery(_searchController.text);
                 },
                 child: ListView(
@@ -296,10 +315,12 @@ class _PublicationsPageState extends ConsumerState<PublicationsPage> {
                     ),
 
                     // Feed Items Title
-                    if (state.publications.isNotEmpty) ...[
-                      const Text(
-                        'Recientes',
-                        style: TextStyle(
+                    if (showingServices
+                        ? services.services.isNotEmpty
+                        : state.publications.isNotEmpty) ...[
+                      Text(
+                        showingServices ? 'Últimos servicios' : 'Recientes',
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: AppColors.white,
@@ -309,7 +330,27 @@ class _PublicationsPageState extends ConsumerState<PublicationsPage> {
                     ],
 
                     // Feed Items
-                    if (state.publications.isEmpty && !state.isLoading)
+                    if (showingServices) ...[
+                      if (services.services.isEmpty && !services.isLoading)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(32.0),
+                            child: Text(
+                              'Todavía no hay servicios publicados.',
+                              style: AppTextStyles.bodyMedium,
+                            ),
+                          ),
+                        )
+                      else
+                        ...services.services.map((s) => ServiceCard(service: s)),
+                      if (services.isLoading)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(16.0),
+                            child: CircularProgressIndicator(color: AppColors.dorado),
+                          ),
+                        ),
+                    ] else if (state.publications.isEmpty && !state.isLoading)
                       const Center(
                         child: Padding(
                           padding: EdgeInsets.all(32.0),
@@ -328,7 +369,7 @@ class _PublicationsPageState extends ConsumerState<PublicationsPage> {
                         },
                       ),
 
-                    if (state.isLoading)
+                    if (!showingServices && state.isLoading)
                       const Center(
                         child: Padding(
                           padding: EdgeInsets.all(16.0),
