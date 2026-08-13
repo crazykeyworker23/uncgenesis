@@ -243,11 +243,10 @@ class _PendingWork extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final meetings = ref.watch(cellMeetingsProvider(cellId));
     final reports = ref.watch(cellReportsProvider(cellId));
     final stats = ref.watch(cellStatisticsProvider(cellId)).valueOrNull;
 
-    final pendingRollCall = _latestWithoutAttendance(meetings.items);
+    final pendingRollCall = ref.watch(pendingRollCallProvider(cellId));
     final draft = _firstDraft(reports.items);
     final needsAttention = stats?.needsAttention ?? 0;
 
@@ -316,17 +315,6 @@ class _PendingWork extends ConsumerWidget {
         ],
       ],
     );
-  }
-
-  /// La reunión más reciente en la que todavía no se pasó lista.
-  ///
-  /// La lista llega ordenada de más nueva a más antigua, así que la primera
-  /// que aparezca sin asistencia es la que toca.
-  static CellMeeting? _latestWithoutAttendance(List<CellMeeting> meetings) {
-    for (final meeting in meetings) {
-      if (!meeting.hasAttendance) return meeting;
-    }
-    return null;
   }
 
   static CellReport? _firstDraft(List<CellReport> reports) {
@@ -404,13 +392,22 @@ class _QuickActions extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (!ref.watch(canManageActiveCellProvider)) return const SizedBox.shrink();
 
+    // Va directo a marcar. Antes llevaba al listado de reuniones y había que
+    // entrar, elegir una y recién ahí aparecía la gente: tres toques para lo
+    // que se hace cada semana. Si no hay ninguna pendiente, al listado, que es
+    // donde se registra una nueva.
+    final pendiente = ref.watch(pendingRollCallProvider(cellId));
+    final rollCall = pendiente == null
+        ? '/leader/meetings'
+        : '/leader/meetings/${pendiente.id}/attendance';
+
     return Row(
       children: [
         Expanded(
           child: _ActionButton(
             icon: Icons.how_to_reg_outlined,
             label: 'Pasar lista',
-            onTap: () => context.push('/leader/meetings'),
+            onTap: () => context.push(rollCall),
           ),
         ),
         const SizedBox(width: 12),

@@ -212,6 +212,20 @@ final cellMeetingsProvider = StateNotifierProvider.family<PagedListNotifier<Cell
   );
 });
 
+/// La reunión más reciente a la que todavía no se le pasó lista.
+///
+/// `null` cuando están todas al día. La lista llega ordenada de más nueva a
+/// más antigua, así que la primera sin asistencia es la que toca.
+///
+/// Lo usan el aviso de pendientes y el atajo «Pasar lista» del inicio: los dos
+/// hablan de la misma reunión, y antes cada uno la buscaba por su cuenta.
+final pendingRollCallProvider = Provider.family<CellMeeting?, int>((ref, cellId) {
+  for (final meeting in ref.watch(cellMeetingsProvider(cellId)).items) {
+    if (!meeting.hasAttendance) return meeting;
+  }
+  return null;
+});
+
 /// Una reunión concreta, para la pantalla de pase de lista.
 ///
 /// Se vuelve a pedir al servidor en lugar de arrastrar el objeto de la lista:

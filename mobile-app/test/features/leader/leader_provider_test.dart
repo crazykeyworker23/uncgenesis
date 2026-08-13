@@ -83,6 +83,77 @@ void main() {
     });
   });
 
+  group('Reunión que espera lista', () {
+    // Es la que abre el atajo «Pasar lista» del inicio y la que anuncia el
+    // bloque de pendientes: los dos hablan de la misma, así que sale de un
+    // solo sitio.
+
+    CellMeeting meeting(int id, String date, {bool marcada = false}) => CellMeeting(
+          id: id,
+          cellId: 7,
+          cellName: 'Norte',
+          date: date,
+          attendances: marcada
+              ? [
+                  const AttendanceEntry(
+                    id: 1,
+                    member: PersonBrief(id: 30, fullName: 'Ana', email: 'a@x.org'),
+                    status: AttendanceStatus.present,
+                    statusDisplay: 'Asistió',
+                  ),
+                ]
+              : const [],
+        );
+
+    ProviderContainer containerCon(List<CellMeeting> meetings) {
+      return ProviderContainer(
+        overrides: [
+          cellMeetingsProvider(7).overrideWith(
+            (ref) => PagedListNotifier<CellMeeting>((_) async =>
+                Paged<CellMeeting>(items: meetings, count: meetings.length)),
+          ),
+        ],
+      );
+    }
+
+    test('es la más reciente sin marcar', () async {
+      // Llegan de más nueva a más antigua; la del 11 ya está pasada.
+      final container = containerCon([
+        meeting(2, '2026-08-11', marcada: true),
+        meeting(1, '2026-08-04'),
+      ]);
+      addTearDown(container.dispose);
+      // Los providers son perezosos: hay que leer la lista para que se
+      // construya, y sólo entonces esperar a que cargue.
+      container.read(cellMeetingsProvider(7));
+      await pumpEventQueue();
+
+      expect(container.read(pendingRollCallProvider(7))?.id, 1);
+    });
+
+    test('no hay ninguna cuando están todas al día', () async {
+      final container = containerCon([meeting(2, '2026-08-11', marcada: true)]);
+      addTearDown(container.dispose);
+      // Los providers son perezosos: hay que leer la lista para que se
+      // construya, y sólo entonces esperar a que cargue.
+      container.read(cellMeetingsProvider(7));
+      await pumpEventQueue();
+
+      expect(container.read(pendingRollCallProvider(7)), isNull);
+    });
+
+    test('tampoco la hay si aún no se registró ninguna reunión', () async {
+      final container = containerCon([]);
+      addTearDown(container.dispose);
+      // Los providers son perezosos: hay que leer la lista para que se
+      // construya, y sólo entonces esperar a que cargue.
+      container.read(cellMeetingsProvider(7));
+      await pumpEventQueue();
+
+      expect(container.read(pendingRollCallProvider(7)), isNull);
+    });
+  });
+
   group('Listas paginadas', () {
     Paged<String> page(List<String> items, {bool hasMore = false}) =>
         Paged<String>(items: items, count: items.length, hasMore: hasMore);
