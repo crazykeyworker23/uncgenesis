@@ -116,10 +116,12 @@ class CellGroupViewSet(CellManagementMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='send-reminder')
     def send_reminder(self, request, pk=None):
         """
-        Envía un recordatorio a los miembros de la célula.
+        Envía un aviso desde la célula.
 
-        El líder no necesita el permiso global de notificaciones: el alcance
-        queda acotado a su propia célula mediante la audiencia CELL.
+        El líder elige entre sus tres interlocutores: su gente, quien le
+        supervisa y el pastorado. No necesita el permiso global de
+        notificaciones porque no puede difundir a la iglesia: el destino queda
+        acotado a su propia célula y a la cadena por encima de ella.
         """
         from apps.notifications.models import (
             Notification,
@@ -132,22 +134,21 @@ class CellGroupViewSet(CellManagementMixin, viewsets.ModelViewSet):
 
         if not can_manage_cell(request.user, cell.id):
             return Response(
-                {"error": "Sólo puedes enviar recordatorios a las células que tienes a tu cargo."},
+                {"error": "Sólo puedes enviar avisos desde las células que tienes a tu cargo."},
                 status=status.HTTP_403_FORBIDDEN
-            )
-
-        if not cell.members.exists():
-            return Response(
-                {"error": "Esta célula todavía no tiene miembros asignados."},
-                status=status.HTTP_400_BAD_REQUEST
             )
 
         serializer = CellReminderSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        recipient = serializer.validated_data['recipient']
+        target = self._resolve_reminder_target(cell, recipient)
+        if 'error' in target:
+            return Response({"error": target['error']}, status=status.HTTP_400_BAD_REQUEST)
+
         title = (serializer.validated_data.get('title') or '').strip()
         if not title:
-            title = f"Recordatorio de {cell.name}"
+            title = target['default_title']
 
         scheduled = serializer.validated_data.get('scheduled_for')
         is_immediate = not scheduled or scheduled <= timezone.now()
@@ -156,9 +157,10 @@ class CellGroupViewSet(CellManagementMixin, viewsets.ModelViewSet):
             title=title,
             body=serializer.validated_data['body'],
             sender=request.user,
-            target_audience=TargetAudience.CELL,
-            target_cell=cell,
-            # Tocar el recordatorio abre la ficha de la célula.
+            target_audience=target['audience'],
+            target_cell=target['cell'],
+            target_user=target['user'],
+            # Tocar el aviso abre la ficha de la célula de la que se habla.
             deep_link=f'/cells/{cell.id}',
             scheduled_for=scheduled,
             status=NotificationStatus.SENT if is_immediate else NotificationStatus.PENDING,
@@ -176,6 +178,7 @@ class CellGroupViewSet(CellManagementMixin, viewsets.ModelViewSet):
                 # pendiente y se puede enviar manualmente desde el panel.
                 pass
 
+        verbo = 'enviado' if is_immediate else 'programado'
         return Response(
             {
                 'id': notification.id,
@@ -183,15 +186,68 @@ class CellGroupViewSet(CellManagementMixin, viewsets.ModelViewSet):
                 'body': notification.body,
                 'status': notification.status,
                 'scheduled_for': notification.scheduled_for,
-                'recipients': cell.members.count(),
-                'detail': (
-                    f"Recordatorio enviado a {cell.members.count()} miembro(s) de {cell.name}."
-                    if is_immediate
-                    else f"Recordatorio programado para {cell.members.count()} miembro(s) de {cell.name}."
-                ),
+                'recipient': recipient,
+                'recipients': target['count'],
+                'detail': f"Aviso {verbo} {target['description']}.",
             },
             status=status.HTTP_201_CREATED
         )
+
+    def _resolve_reminder_target(self, cell, recipient):
+        """
+        Traduce el destinatario elegido a la audiencia con que se guarda el
+        aviso, y al texto con que se le confirma al líder.
+
+        Devuelve un diccionario con `error` cuando ese destino no existe
+        todavía —una célula sin gente, o sin coordinador asignado—, para que
+        el líder sepa por qué no salió en lugar de creer que sí.
+        """
+        from apps.notifications.models import TargetAudience
+        from apps.roles.models import RoleType, UserRole
+
+        from .serializers import ReminderRecipient
+
+        if recipient == ReminderRecipient.COORDINATOR:
+            if cell.coordinator is None:
+                return {'error': f'{cell.name} todavía no tiene un coordinador asignado.'}
+            nombre = f'{cell.coordinator.first_name} {cell.coordinator.last_name}'.strip()
+            return {
+                'audience': TargetAudience.USER,
+                'cell': cell,
+                'user': cell.coordinator,
+                'count': 1,
+                'default_title': f'{cell.name}: mensaje para tu coordinador',
+                'description': f'a {nombre or cell.coordinator.email}',
+            }
+
+        if recipient == ReminderRecipient.PASTORS:
+            pastores = UserRole.objects.filter(role__name=RoleType.ADMIN).count()
+            if pastores == 0:
+                return {
+                    'error': 'Todavía no hay nadie con el rol de pastor en el sistema. '
+                             'Pídele al administrador que lo asigne.'
+                }
+            return {
+                'audience': TargetAudience.PASTORS,
+                'cell': cell,
+                'user': None,
+                'count': pastores,
+                'default_title': f'{cell.name}: mensaje para el pastorado',
+                'description': 'al pastorado',
+            }
+
+        # Por omisión, la propia célula.
+        miembros = cell.members.count()
+        if miembros == 0:
+            return {'error': f'{cell.name} todavía no tiene miembros asignados.'}
+        return {
+            'audience': TargetAudience.CELL,
+            'cell': cell,
+            'user': None,
+            'count': miembros,
+            'default_title': f'Recordatorio de {cell.name}',
+            'description': f'a {miembros} miembro(s) de {cell.name}',
+        }
 
     def get_object(self):
         queryset = self.filter_queryset(self.get_queryset())

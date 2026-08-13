@@ -402,6 +402,33 @@ void main() {
       expect(find.text('ENVIAR AHORA'), findsOneWidget);
     });
 
+    testWidgets('el líder elige entre sus tres interlocutores', (tester) async {
+      // Su gente, quien le supervisa y el pastorado. Difundir a la iglesia
+      // entera no está: eso exige permisos de comunicaciones.
+      await tester.pumpWidget(createTestWidget(const CellAnnouncementPage(), asLeader: true));
+      await settleRequests(tester);
+
+      expect(find.text('Mi célula'), findsOneWidget);
+      expect(find.text('Mi coordinador'), findsOneWidget);
+      expect(find.text('El pastorado'), findsOneWidget);
+      expect(find.textContaining('Toda la iglesia'), findsNothing);
+    });
+
+    testWidgets('viene marcada la célula, que es lo más habitual', (tester) async {
+      await tester.pumpWidget(createTestWidget(const CellAnnouncementPage(), asLeader: true));
+      await settleRequests(tester);
+
+      // Un solo destino marcado a la vez.
+      expect(find.byIcon(Icons.radio_button_checked), findsOneWidget);
+      expect(find.byIcon(Icons.radio_button_unchecked), findsNWidgets(2));
+
+      await tester.tap(find.text('El pastorado'));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.radio_button_checked), findsOneWidget);
+      expect(find.byIcon(Icons.radio_button_unchecked), findsNWidgets(2));
+    });
+
     testWidgets('el perfil no repite la gestión: el líder la tiene en su pestaña', (tester) async {
       await tester.pumpWidget(createTestWidget(const ProfilePage(), asLeader: true));
       await settleRequests(tester);

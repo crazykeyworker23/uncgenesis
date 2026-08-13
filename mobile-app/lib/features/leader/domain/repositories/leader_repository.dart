@@ -26,12 +26,16 @@ abstract class LeaderRepository {
   /// Retira a alguien de la célula sin borrar su cuenta.
   Future<String> removeMember(int cellId, int memberId);
 
-  /// Envía —o programa— un aviso a los miembros de la célula.
+  /// Envía —o programa— un aviso desde la célula.
+  ///
+  /// [recipient] elige a cuál de los tres interlocutores va: su gente, quien
+  /// le supervisa o el pastorado. Ver [ReminderRecipient].
   Future<String> sendReminder(
     int cellId, {
     String title,
     required String body,
     DateTime? scheduledFor,
+    String recipient,
   });
 
   Future<Paged<CellMeeting>> getMeetings(int cellId, {int page});

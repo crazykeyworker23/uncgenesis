@@ -233,6 +233,35 @@ class CellMeeting {
   }
 }
 
+/// A quién puede dirigir el líder un aviso.
+///
+/// Son sus tres interlocutores: su gente, quien le supervisa y el pastorado.
+/// Difundir a toda la iglesia no está aquí a propósito: eso exige permisos de
+/// comunicaciones que el líder no tiene, y el servidor lo rechaza.
+class ReminderRecipient {
+  ReminderRecipient._();
+
+  static const String cell = 'CELL';
+  static const String coordinator = 'COORDINATOR';
+  static const String pastors = 'PASTORS';
+
+  static const List<String> all = [cell, coordinator, pastors];
+
+  static const Map<String, String> labels = {
+    cell: 'Mi célula',
+    coordinator: 'Mi coordinador',
+    pastors: 'El pastorado',
+  };
+
+  static const Map<String, String> descriptions = {
+    cell: 'A todas las personas de tu grupo',
+    coordinator: 'A quien supervisa tu célula',
+    pastors: 'Al pastor de la iglesia',
+  };
+
+  static String label(String? recipient) => labels[recipient] ?? 'Mi célula';
+}
+
 /// Tipos de contacto de un seguimiento pastoral.
 class FollowUpType {
   FollowUpType._();

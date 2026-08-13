@@ -90,6 +90,9 @@ class NotificationViewSet(viewsets.ModelViewSet):
             query |= Q(target_audience='LEADERS', target_user__isnull=True)
         if user.is_superuser or RoleType.MEMBER in user_roles:
             query |= Q(target_audience='MEMBERS', target_user__isnull=True)
+        # Lo que los lideres escriben hacia arriba lo lee el pastorado.
+        if user.is_superuser or RoleType.ADMIN in user_roles:
+            query |= Q(target_audience='PASTORS', target_user__isnull=True)
 
         # 3. Recordatorios que el lider envia a su celula: los recibe quien
         #    esta asignado a esa celula, y tambien el propio lider.

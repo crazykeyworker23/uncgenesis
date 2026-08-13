@@ -1,3 +1,4 @@
+from django.db import models
 from rest_framework import serializers
 from .models import CellGroup
 from apps.users.models import CustomUser
@@ -30,12 +31,33 @@ class CellMemberSerializer(serializers.ModelSerializer):
         return full if full else obj.email
 
 
+class ReminderRecipient(models.TextChoices):
+    """
+    A quién dirige el líder su aviso.
+
+    Son los tres interlocutores que tiene: su gente, quien le supervisa y el
+    pastorado. No puede escribir a la iglesia entera —eso es difusión, y para
+    eso hacen falta permisos de comunicaciones— ni a una célula ajena.
+    """
+
+    CELL = 'CELL', 'Los miembros de la célula'
+    COORDINATOR = 'COORDINATOR', 'El coordinador de la célula'
+    PASTORS = 'PASTORS', 'El pastorado'
+
+
 class CellReminderSerializer(serializers.Serializer):
-    """Recordatorio que un líder envía a los miembros de su célula."""
+    """Aviso que un líder envía desde su célula."""
 
     title = serializers.CharField(max_length=150, required=False, allow_blank=True)
     body = serializers.CharField()
     scheduled_for = serializers.DateTimeField(required=False, allow_null=True)
+    # Sin indicar nada va a la célula, que es lo que se hacía antes de que
+    # hubiera destinatarios: así no se rompe ningún cliente ya publicado.
+    recipient = serializers.ChoiceField(
+        choices=ReminderRecipient.choices,
+        required=False,
+        default=ReminderRecipient.CELL,
+    )
 
 
 class CellGroupSerializer(serializers.ModelSerializer):

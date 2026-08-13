@@ -412,6 +412,112 @@ class TestCoordinatorScope:
 
 
 @pytest.mark.django_db
+class TestLeaderChoosesRecipient:
+    """
+    El líder elige a quién escribe: su gente, quien le supervisa o el
+    pastorado.
+
+    Antes el destino estaba fijado a su célula y no habia forma de escribir
+    hacia arriba. Lo que sigue sin poder hacer es difundir a la iglesia, que
+    exige permisos de comunicaciones.
+    """
+
+    def _enviar(self, church, cuerpo, **extra):
+        return _client(church['leader_a']).post(
+            cell_url('send-reminder', church['cell_a'].id),
+            {'body': cuerpo, **extra},
+            format='json',
+        )
+
+    def test_sin_indicar_destino_sigue_yendo_a_la_celula(self, church):
+        """Los clientes ya publicados no tienen que cambiar nada."""
+        from apps.notifications.models import Notification, TargetAudience
+
+        res = self._enviar(church, 'Nos vemos el jueves.')
+        assert res.status_code == status.HTTP_201_CREATED
+
+        aviso = Notification.objects.get(id=res.data['id'])
+        assert aviso.target_audience == TargetAudience.CELL
+        assert aviso.target_cell_id == church['cell_a'].id
+
+    def test_puede_escribir_a_su_coordinador(self, church):
+        from apps.notifications.models import Notification, TargetAudience
+
+        res = self._enviar(church, 'Necesito apoyo con una familia.', recipient='COORDINATOR')
+        assert res.status_code == status.HTTP_201_CREATED
+
+        aviso = Notification.objects.get(id=res.data['id'])
+        assert aviso.target_audience == TargetAudience.USER
+        assert aviso.target_user_id == church['coordinator'].id
+        assert res.data['recipients'] == 1
+
+    def test_puede_escribir_al_pastorado(self, church):
+        from apps.notifications.models import Notification, TargetAudience
+
+        res = self._enviar(church, 'Invitación al aniversario.', recipient='PASTORS')
+        assert res.status_code == status.HTTP_201_CREATED
+
+        aviso = Notification.objects.get(id=res.data['id'])
+        assert aviso.target_audience == TargetAudience.PASTORS
+        assert aviso.target_user_id is None
+
+    def test_no_puede_difundir_a_toda_la_iglesia(self, church):
+        """Ese destino no está en el catálogo: difundir exige otro permiso."""
+        res = self._enviar(church, 'A todos', recipient='ALL')
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_una_celula_sin_coordinador_lo_dice(self, church):
+        res = _client(church['outsider_leader']).post(
+            cell_url('send-reminder', church['cell_z'].id),
+            {'body': 'Hola', 'recipient': 'COORDINATOR'},
+            format='json',
+        )
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'coordinador' in res.data['error']
+
+    def test_una_celula_sin_gente_no_impide_escribir_al_pastor(self, church):
+        """
+        Antes el endpoint rechazaba todo si la célula estaba vacía.
+
+        Es razonable para avisar a la célula, pero dejaba al líder sin poder
+        pedir ayuda justo cuando más falta le hacía.
+        """
+        vacia = church['cell_b']
+        assert not vacia.members.exists()
+
+        a_la_celula = _client(church['leader_b']).post(
+            cell_url('send-reminder', vacia.id), {'body': 'Hola'}, format='json'
+        )
+        assert a_la_celula.status_code == status.HTTP_400_BAD_REQUEST
+
+        al_pastor = _client(church['leader_b']).post(
+            cell_url('send-reminder', vacia.id),
+            {'body': 'Todavía no tengo a nadie asignado.', 'recipient': 'PASTORS'},
+            format='json',
+        )
+        assert al_pastor.status_code == status.HTTP_201_CREATED
+
+    def test_cada_destino_llega_a_quien_debe_y_a_nadie_mas(self, church):
+        """Lo que va al pastorado no aparece en el listado de un miembro."""
+        self._enviar(church, 'Para el pastorado', recipient='PASTORS')
+
+        del_pastor = _client(church['pastor']).get(reverse('notifications-list'))
+        assert 'Para el pastorado' in [n['body'] for n in del_pastor.data['results']]
+
+        del_miembro = _client(church['member_a']).get(reverse('notifications-list'))
+        assert 'Para el pastorado' not in [n['body'] for n in del_miembro.data['results']]
+
+    def test_el_coordinador_recibe_lo_que_le_dirigen(self, church):
+        self._enviar(church, 'Sólo para ti, coordinador', recipient='COORDINATOR')
+
+        suyo = _client(church['coordinator']).get(reverse('notifications-list'))
+        assert 'Sólo para ti, coordinador' in [n['body'] for n in suyo.data['results']]
+
+        ajeno = _client(church['member_a']).get(reverse('notifications-list'))
+        assert 'Sólo para ti, coordinador' not in [n['body'] for n in ajeno.data['results']]
+
+
+@pytest.mark.django_db
 class TestPastorScope:
     def test_pastor_reaches_every_cell(self, church):
         client = _client(church['pastor'])

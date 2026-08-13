@@ -127,6 +127,9 @@ def resolve_target_tokens(notification):
     role_by_audience = {
         TargetAudience.LEADERS: RoleType.CELL_LEADER,
         TargetAudience.MEMBERS: RoleType.MEMBER,
+        # Lo que un líder escribe hacia arriba llega a quien pastorea la
+        # iglesia, no al superadministrador, que es una figura técnica.
+        TargetAudience.PASTORS: RoleType.ADMIN,
     }
     role = role_by_audience.get(audience)
     if role:

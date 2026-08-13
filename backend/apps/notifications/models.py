@@ -45,6 +45,9 @@ class TargetAudience(models.TextChoices):
     MEMBERS = 'MEMBERS', 'Miembros Registrados'
     USER = 'USER', 'Usuario Específico'
     CELL = 'CELL', 'Miembros de una Célula'
+    # Permite que un líder escriba hacia arriba, a quien pastorea la iglesia,
+    # sin abrirle la difusión general.
+    PASTORS = 'PASTORS', 'Pastorado'
 
 
 class Notification(models.Model):

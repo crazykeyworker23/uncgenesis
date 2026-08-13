@@ -63,14 +63,16 @@ class LeaderRepositoryImpl implements LeaderRepository {
     String title = '',
     required String body,
     DateTime? scheduledFor,
+    String recipient = ReminderRecipient.cell,
   }) async {
     final response = await _dio.post('/cells/$cellId/send-reminder/', data: {
       if (title.trim().isNotEmpty) 'title': title.trim(),
       'body': body.trim(),
+      'recipient': recipient,
       // El servidor entiende «sin fecha» como enviar ahora mismo.
       if (scheduledFor != null) 'scheduled_for': scheduledFor.toUtc().toIso8601String(),
     });
-    return _detail(response.data, fallback: 'Aviso enviado a tu célula.');
+    return _detail(response.data, fallback: 'Aviso enviado.');
   }
 
   @override

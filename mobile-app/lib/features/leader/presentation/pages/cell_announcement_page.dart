@@ -4,14 +4,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/utils/api_error.dart';
+import '../../data/models/leader_models.dart';
 import '../providers/leader_providers.dart';
 import '../widgets/leader_widgets.dart';
 
-/// Aviso del líder a los miembros de su célula.
+/// Aviso que el líder envía desde su célula.
 ///
-/// Sale como notificación al teléfono —llega también con la app cerrada— y
-/// queda registrado en el listado de avisos de cada persona. El alcance está
-/// acotado por el servidor: sólo llega a quien pertenece a esta célula.
+/// Elige a cuál de sus tres interlocutores va: su gente, quien le supervisa o
+/// el pastorado. Sale como notificación al teléfono —llega también con la app
+/// cerrada— y queda registrado en el listado de quien lo recibe.
+///
+/// Difundir a la iglesia entera no está entre las opciones: eso exige permisos
+/// de comunicaciones, y el servidor vuelve a comprobar el destino elegido.
 class CellAnnouncementPage extends ConsumerStatefulWidget {
   const CellAnnouncementPage({super.key});
 
@@ -24,6 +28,7 @@ class _CellAnnouncementPageState extends ConsumerState<CellAnnouncementPage> {
   final _title = TextEditingController();
   final _body = TextEditingController();
 
+  String _recipient = ReminderRecipient.cell;
   bool _scheduled = false;
   DateTime _date = DateTime.now().add(const Duration(days: 1));
   TimeOfDay _time = const TimeOfDay(hour: 9, minute: 0);
@@ -59,32 +64,27 @@ class _CellAnnouncementPageState extends ConsumerState<CellAnnouncementPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.dorado.withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.dorado.withValues(alpha: 0.22)),
+              const LeaderSectionLabel('Para quién'),
+              for (final option in ReminderRecipient.all) ...[
+                _RecipientOption(
+                  label: ReminderRecipient.labels[option]!,
+                  description: option == ReminderRecipient.cell && recipients != null
+                      ? '$recipients persona(s) de ${cell.name}'
+                      : ReminderRecipient.descriptions[option]!,
+                  icon: _iconFor(option),
+                  selected: _recipient == option,
+                  onTap: () => setState(() => _recipient = option),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.campaign_outlined, color: AppColors.dorado, size: 20),
-                    const SizedBox(width: 11),
-                    Expanded(
-                      child: Text(
-                        recipients == null
-                            ? 'El aviso llegará al teléfono de tu célula.'
-                            : 'Llegará a $recipients persona(s) de ${cell.name}, aunque tengan '
-                                'la app cerrada.',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.crema.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ),
-                  ],
+                if (option != ReminderRecipient.all.last) const SizedBox(height: 8),
+              ],
+              const SizedBox(height: 10),
+              Text(
+                'Llega al teléfono aunque tengan la app cerrada.',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.crema.withValues(alpha: 0.45),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 22),
 
               TextFormField(
                 controller: _title,
@@ -93,7 +93,7 @@ class _CellAnnouncementPageState extends ConsumerState<CellAnnouncementPage> {
                 decoration: InputDecoration(
                   labelText: 'Título',
                   hintText: 'Recordatorio de ${cell.name}',
-                  helperText: 'Si lo dejas vacío se usa el nombre de tu célula.',
+                  helperText: 'Si lo dejas vacío se pone uno según a quién va.',
                   prefixIcon: const Icon(Icons.title, color: AppColors.dorado),
                   counterText: '',
                 ),
@@ -198,6 +198,17 @@ class _CellAnnouncementPageState extends ConsumerState<CellAnnouncementPage> {
     );
   }
 
+  static IconData _iconFor(String recipient) {
+    switch (recipient) {
+      case ReminderRecipient.coordinator:
+        return Icons.supervisor_account_outlined;
+      case ReminderRecipient.pastors:
+        return Icons.church_outlined;
+      default:
+        return Icons.groups_outlined;
+    }
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -241,6 +252,7 @@ class _CellAnnouncementPageState extends ConsumerState<CellAnnouncementPage> {
             title: _title.text,
             body: _body.text,
             scheduledFor: scheduledFor,
+            recipient: _recipient,
           );
 
       if (!mounted) return;
@@ -257,4 +269,79 @@ class _CellAnnouncementPageState extends ConsumerState<CellAnnouncementPage> {
   }
 
   static String _two(int value) => value.toString().padLeft(2, '0');
+}
+
+/// Uno de los destinos posibles del aviso.
+class _RecipientOption extends StatelessWidget {
+  final String label;
+  final String description;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _RecipientOption({
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.dorado.withValues(alpha: 0.1) : AppColors.cardColor,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? AppColors.dorado : AppColors.crema.withValues(alpha: 0.1),
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: selected ? AppColors.dorado : AppColors.crema.withValues(alpha: 0.5),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: selected ? AppColors.doradoClaro : AppColors.crema,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      description,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.crema.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                size: 19,
+                color: selected ? AppColors.dorado : AppColors.crema.withValues(alpha: 0.3),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
