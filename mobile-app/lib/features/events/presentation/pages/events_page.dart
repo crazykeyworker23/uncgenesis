@@ -254,7 +254,9 @@ class _LargeEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateOnly = DateFormatter.longDate(event.startDate);
+    // Con su fecha de fin: un evento de varios días se anunciaba con la de
+    // inicio a secas y parecía de uno solo.
+    final dateOnly = DateFormatter.dateRange(event.startDate, event.endDate);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),

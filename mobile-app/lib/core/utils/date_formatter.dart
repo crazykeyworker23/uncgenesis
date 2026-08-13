@@ -75,6 +75,45 @@ class DateFormatter {
     return '${_two(hour12)}:${_two(date.minute)} $suffix';
   }
 
+  /// Cuándo ocurre algo que tiene principio y fin.
+  ///
+  /// `Martes 4 de agosto` si empieza y acaba el mismo día, `Del 4 al 6 de
+  /// agosto` si dura varios, y con los dos meses si los cruza. Un evento de
+  /// varios días se anunciaba con la fecha de inicio a secas, así que parecía
+  /// de uno solo y la gente no sabía hasta cuándo podía ir.
+  static String dateRange(String? start, String? end, {String fallback = 'Fecha por confirmar'}) {
+    final desde = parse(start);
+    if (desde == null) return fallback;
+
+    final hasta = parse(end);
+    if (hasta == null || _sameDay(desde, hasta)) return longDate(start, fallback: fallback);
+
+    if (desde.year == hasta.year && desde.month == hasta.month) {
+      return 'Del ${desde.day} al ${hasta.day} de ${_months[desde.month - 1]}';
+    }
+    return 'Del ${desde.day} de ${_months[desde.month - 1]} '
+        'al ${hasta.day} de ${_months[hasta.month - 1]}';
+  }
+
+  /// `07:00 PM a 09:00 PM`, sólo cuando empieza y acaba el mismo día.
+  ///
+  /// En algo de varios días la hora de fin no dice nada útil junto a la de
+  /// inicio; ahí manda el rango de fechas.
+  static String? timeRange(String? start, String? end) {
+    final inicio = time(start);
+    if (inicio == null) return null;
+
+    final desde = parse(start);
+    final hasta = parse(end);
+    if (desde == null || hasta == null || !_sameDay(desde, hasta)) return inicio;
+
+    final fin = time(end);
+    return fin == null ? inicio : '$inicio a $fin';
+  }
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
   /// `4 de agosto de 2026 · 07:30 PM`
   static String dateAndTime(String? raw, {String fallback = 'Fecha por confirmar'}) {
     final date = parse(raw);

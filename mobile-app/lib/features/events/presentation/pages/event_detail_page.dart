@@ -158,8 +158,8 @@ class _EventDetailBody extends StatelessWidget {
   Widget build(BuildContext context) {
     // `split('T')[1]` reventaba con RangeError cuando el evento venía sólo con
     // fecha (sin hora). Ahora el formateo es seguro y en español.
-    final formattedDate = DateFormatter.fullDate(event.startDate);
-    final formattedTime = DateFormatter.time(event.startDate);
+    final formattedDate = DateFormatter.dateRange(event.startDate, event.endDate);
+    final formattedTime = DateFormatter.timeRange(event.startDate, event.endDate);
     final isFull = event.capacity != null && (event.registeredCount ?? 0) >= event.capacity!;
     final isRegistered = event.isRegistered == true;
 
