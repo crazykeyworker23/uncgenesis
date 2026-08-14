@@ -194,34 +194,38 @@ class LeaderRepositoryImpl implements LeaderRepository {
   Future<CellReport> saveReport({
     required int cellId,
     int? reportId,
+    required String kind,
     required String periodStart,
     required String periodEnd,
     required String summary,
     String highlights = '',
     String challenges = '',
     String prayerNeeds = '',
-    String photoCaption = '',
-    String? photoPath,
+    List<String> photoPaths = const [],
   }) async {
     final fields = <String, dynamic>{
       'cell': cellId,
+      'kind': kind,
       'period_start': periodStart,
       'period_end': periodEnd,
       'summary': summary.trim(),
       'highlights': highlights.trim(),
       'challenges': challenges.trim(),
       'prayer_needs': prayerNeeds.trim(),
-      'photo_caption': photoCaption.trim(),
     };
 
-    // Con foto hay que ir en multipart; sin ella, JSON normal. Mandar siempre
-    // multipart obligaría a convertir todos los números a texto.
+    // Con imágenes hay que ir en multipart; sin ellas, JSON normal. Mandar
+    // siempre multipart obligaría a convertir todos los números a texto.
+    //
+    // Las imágenes viajan todas bajo el mismo nombre, `photos`, que es como el
+    // servidor las recoge en lote.
     final Object payload;
-    if (photoPath != null && photoPath.isNotEmpty) {
-      payload = FormData.fromMap({
-        ...fields.map((key, value) => MapEntry(key, '$value')),
-        'photo': await MultipartFile.fromFile(photoPath),
-      });
+    if (photoPaths.isNotEmpty) {
+      final form = FormData.fromMap(fields.map((key, value) => MapEntry(key, '$value')));
+      for (final ruta in photoPaths) {
+        form.files.add(MapEntry('photos', await MultipartFile.fromFile(ruta)));
+      }
+      payload = form;
     } else {
       payload = fields;
     }

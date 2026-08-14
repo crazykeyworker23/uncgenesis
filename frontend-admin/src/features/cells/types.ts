@@ -24,6 +24,8 @@ export interface CellLeader {
   email: string;
   first_name: string;
   last_name: string;
+  /** Nombre y apellido ya unidos por el servidor; el correo si no los tiene. */
+  full_name: string;
 }
 
 export interface CellGroup {

@@ -14,7 +14,8 @@ import {
   AlertCircle,
   Eye,
   BookOpen,
-  CalendarDays
+  CalendarDays,
+  ClipboardCheck
 } from 'lucide-react';
 import { apiClient } from '../api/client';
 import { Can } from '../components/auth/Can';
@@ -92,6 +93,16 @@ export const DevotionalList: React.FC = () => {
           <p className="text-xs text-crema text-opacity-50 mt-1.5">Redacta y programa las lecturas y reflexiones del devocional diario para la comunidad.</p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-center">
+        {/* Lo que las células reportaron del plan: quién leyó y quién no. */}
+        <Can permission="CELL_REPORTS_VIEW">
+        <Link
+          to="/devocionales/reportes"
+          className="flex items-center justify-center gap-2 btn-secondary text-xs font-bold"
+        >
+          <ClipboardCheck size={16} />
+          Reportes de líderes
+        </Link>
+        </Can>
         <Can permission="DEVOTIONALS_CREATE">
         {/* Cargar la semana de una vez: siete pasajes en una pantalla, en vez
             de siete formularios largos. */}

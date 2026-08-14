@@ -132,17 +132,43 @@ export const REPORT_STATUS: Record<CellReportStatus, { label: string; classes: s
   },
 };
 
+/** Qué entrega el informe: cómo fue la reunión, o la lectura del devocional. */
+export type CellReportKind = 'ACTIVITY' | 'DEVOTIONAL';
+
+export const REPORT_KIND: Record<CellReportKind, { label: string; classes: string }> = {
+  ACTIVITY: {
+    label: 'Actividad',
+    classes: 'bg-white/5 text-crema/70 border-white/10',
+  },
+  DEVOTIONAL: {
+    label: 'Devocional',
+    classes: 'bg-dorado/15 text-dorado border-dorado/40',
+  },
+};
+
+/** Una imagen del informe. Un informe admite hasta cinco. */
+export interface ReportPhoto {
+  id: number;
+  url: string;
+  caption: string;
+  position: number;
+}
+
 export interface CellReport {
   id: number;
   cell: number;
   cell_name: string;
+  kind: CellReportKind;
+  kind_display: string;
+  /** Las imágenes adjuntas, en el orden en que se subieron. */
+  photos: ReportPhoto[];
   period_start: string;
   period_end: string;
   summary: string;
   highlights: string;
   challenges: string;
   prayer_needs: string;
-  /** Dirección de la foto de la actividad, si la hay. */
+  /** La foto única de los informes entregados antes de admitir varias. */
   photo_url: string | null;
   photo_caption: string;
   /** Cifras que se congelaban al enviar. Ya no se calculan ni se muestran:
@@ -157,4 +183,12 @@ export interface CellReport {
   reviewed_by: CellMember | null;
   reviewed_at: string | null;
   review_notes: string;
+}
+
+/** Todo lo que hay que mostrar del informe, contando la foto única de los
+ *  entregados antes del cambio. */
+export function reportImages(report: CellReport): string[] {
+  const urls = report.photos?.map((photo) => photo.url).filter(Boolean) ?? [];
+  if (urls.length) return urls;
+  return report.photo_url ? [report.photo_url] : [];
 }

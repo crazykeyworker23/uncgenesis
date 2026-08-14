@@ -7,9 +7,9 @@ from rest_framework import serializers
 from .models import (
     Attendance,
     AttendanceStatus,
-    CellGroup,
     CellMeeting,
     CellReport,
+    CellReportPhoto,
     MemberFollowUp,
 )
 
@@ -152,9 +152,28 @@ class CellStatisticsSerializer(serializers.Serializer):
     needs_attention = serializers.IntegerField()
 
 
-class CellReportSerializer(serializers.ModelSerializer):
-    """Informe de actividad que el líder envía sobre su célula."""
+class CellReportPhotoSerializer(serializers.ModelSerializer):
+    """Una imagen del informe, ya resuelta para mostrarla."""
 
+    url = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = CellReportPhoto
+        fields = ['id', 'url', 'caption', 'position']
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_url(self, obj):
+        request = self.context.get('request')
+        if not obj.image:
+            return None
+        return request.build_absolute_uri(obj.image.url) if request else obj.image.url
+
+
+class CellReportSerializer(serializers.ModelSerializer):
+    """Informe que el líder envía sobre su célula."""
+
+    photos = CellReportPhotoSerializer(many=True, read_only=True)
+    kind_display = serializers.CharField(source='get_kind_display', read_only=True)
     cell_name = serializers.CharField(source='cell.name', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     submitted_by = PersonBriefSerializer(read_only=True)
@@ -164,10 +183,10 @@ class CellReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = CellReport
         fields = [
-            'id', 'cell', 'cell_name',
+            'id', 'cell', 'cell_name', 'kind', 'kind_display',
             'period_start', 'period_end',
             'summary', 'highlights', 'challenges', 'prayer_needs',
-            'photo', 'photo_url', 'photo_caption',
+            'photo', 'photo_url', 'photo_caption', 'photos',
             'meetings_held', 'average_attendance', 'new_members',
             'status', 'status_display',
             'submitted_by', 'sent_at',
@@ -175,7 +194,8 @@ class CellReportSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = [
-            'id', 'cell_name', 'status', 'status_display', 'photo_url',
+            'id', 'cell_name', 'kind_display', 'status', 'status_display',
+            'photo_url', 'photos',
             'meetings_held', 'average_attendance', 'new_members',
             'submitted_by', 'sent_at',
             'reviewed_by', 'reviewed_at', 'review_notes',

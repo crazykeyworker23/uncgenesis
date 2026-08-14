@@ -136,13 +136,21 @@ class MockAdapter implements HttpClientAdapter {
     } else if (path.contains('/cell-reports/')) {
       // El primero es de un día, como los que se redactan ahora. El segundo
       // conserva un periodo, como los que ya se entregaron antes del cambio.
-      responseString = '{"count":2,"next":null,"results":['
-          '{"id":9,"cell":1,"cell_name":"Célula Norte",'
+      // El tercero es el del devocional, con su captura.
+      responseString = '{"count":3,"next":null,"results":['
+          '{"id":9,"cell":1,"cell_name":"Célula Norte","kind":"ACTIVITY",'
           '"period_start":"2026-08-03","period_end":"2026-08-03",'
-          '"summary":"Buen mes.","status":"DRAFT","status_display":"Borrador"},'
+          '"summary":"Buen mes.","status":"DRAFT","status_display":"Borrador",'
+          '"photos":[{"id":1,"url":"https://x/1.jpg","caption":"","position":0},'
+          '{"id":2,"url":"https://x/2.jpg","caption":"","position":1}]},'
           '{"id":8,"cell":1,"cell_name":"Célula Norte",'
           '"period_start":"2026-07-01","period_end":"2026-07-31",'
-          '"summary":"Mes anterior.","status":"REVIEWED","status_display":"Revisado"}]}';
+          '"summary":"Mes anterior.","status":"REVIEWED","status_display":"Revisado"},'
+          '{"id":7,"cell":1,"cell_name":"Célula Norte","kind":"DEVOTIONAL",'
+          '"kind_display":"Devocional",'
+          '"period_start":"2026-08-05","period_end":"2026-08-05",'
+          '"summary":"Salmos 23.","status":"SENT","status_display":"Enviado",'
+          '"photos":[{"id":3,"url":"https://x/3.jpg","caption":"","position":0}]}]}';
     } else if (path.contains('/settings/public/')) {
       responseString = '{"app":{"app_name":"Génesis","app_description":"","splash_text":"","primary_color":"#000000","secondary_color":"#ffffff"},"church":{"church_name":"Iglesia","address":"","city":"","country":"","email":"","website":"","whatsapp":""},"schedules":[],"social_networks":[]}';
     } else if (path.contains('/devotionals/today/')) {
@@ -386,6 +394,80 @@ void main() {
       await settleRequests(tester);
 
       expect(find.text('Lunes 3 de agosto'), findsOneWidget);
+    });
+
+    testWidgets('el reporte del devocional se distingue del informe corriente', (tester) async {
+      await tester.pumpWidget(createTestWidget(const CellReportsPage(), asLeader: true));
+      await settleRequests(tester);
+
+      expect(find.text('Salmos 23.'), findsOneWidget);
+      expect(find.text('DEVOCIONAL'), findsOneWidget);
+    });
+
+    testWidgets('un informe con varias fotos las muestra todas', (tester) async {
+      await tester.pumpWidget(createTestWidget(const CellReportsPage(), asLeader: true));
+      await settleRequests(tester);
+
+      // Dos del informe de actividad y una del devocional: si sólo se pintara
+      // la primera de cada uno, aquí saldrían dos.
+      expect(find.byType(Image), findsNWidgets(3));
+    });
+
+    testWidgets('al redactar se elige qué se informa', (tester) async {
+      await tester.pumpWidget(createTestWidget(const CellReportsPage(), asLeader: true));
+      await settleRequests(tester);
+
+      await tester.tap(find.text('REDACTAR'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Informe de la célula'), findsOneWidget);
+      expect(find.text('Reporte del devocional'), findsOneWidget);
+    });
+
+    testWidgets('el devocional no se guarda sin su captura', (tester) async {
+      // Es la constancia de la lectura: se avisa al guardar y no al enviar,
+      // que es cuando el servidor lo rechazaría.
+      await tester.pumpWidget(createTestWidget(const CellReportsPage(), asLeader: true));
+      await settleRequests(tester);
+
+      await tester.tap(find.text('REDACTAR'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Reporte del devocional'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextFormField).first, 'Salmos 23');
+      await tester.tap(find.text('GUARDAR BORRADOR'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Adjunta la captura de la lectura.'), findsOneWidget);
+    });
+
+    testWidgets('el devocional pide el día y la lectura, no el informe entero', (tester) async {
+      await tester.pumpWidget(createTestWidget(const CellReportsPage(), asLeader: true));
+      await settleRequests(tester);
+
+      await tester.tap(find.text('REDACTAR'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Reporte del devocional'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Día que leyeron'), findsOneWidget);
+      expect(find.text('Qué leyeron *'), findsOneWidget);
+      expect(find.text('Dificultades'), findsNothing);
+      expect(find.text('Motivos de oración'), findsNothing);
+    });
+
+    testWidgets('el informe de la célula sí pide sus apartados y varias fotos', (tester) async {
+      await tester.pumpWidget(createTestWidget(const CellReportsPage(), asLeader: true));
+      await settleRequests(tester);
+
+      await tester.tap(find.text('REDACTAR'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Informe de la célula'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Motivos de oración'), findsOneWidget);
+      expect(find.text('ADJUNTAR FOTOS'), findsOneWidget);
     });
 
     testWidgets('los informes entregados con periodo siguen mostrándolo', (tester) async {

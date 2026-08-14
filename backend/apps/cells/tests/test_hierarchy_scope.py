@@ -150,7 +150,7 @@ class TestScopeResolution:
 
         # El coordinador supervisa y puede gestionar las asignadas
         assert can_reach_cell(coordinator, cell_a.id)
-        assert can_manage_cell(coordinator, cell_b_id := church['cell_b'].id)
+        assert can_manage_cell(coordinator, church['cell_b'].id)
         assert not can_reach_cell(coordinator, cell_z.id)
 
         # El líder, sólo la suya
@@ -981,3 +981,307 @@ class TestMemberCanFollowItsOwnCell:
         """Abrir las reuniones no le abre el panel."""
         res = _client(church['member_a']).get(reverse('auth_me'))
         assert res.data['can_access_admin'] is False
+
+
+def _imagen(nombre='captura.png'):
+    """Un PNG mínimo de verdad: Pillow rechaza cualquier cosa que no lo sea."""
+    import io
+
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new('RGB', (4, 4), color='white').save(buffer, format='PNG')
+    return SimpleUploadedFile(nombre, buffer.getvalue(), content_type='image/png')
+
+
+@pytest.mark.django_db
+class TestImagenesDelInforme:
+    """
+    El informe llevaba una sola foto.
+
+    Una reunión no se cuenta bien con una imagen, y el informe de devocional es
+    justamente una captura. Se admiten hasta cinco: cada una ronda los dos
+    megas y el líder las sube desde el teléfono, muchas veces con datos.
+    """
+
+    def _crear(self, church, imagenes, **extra):
+        datos = {
+            'cell': church['cell_a'].id,
+            'period_start': '2026-08-10',
+            'period_end': '2026-08-10',
+            'summary': 'Nos reunimos y estudiamos el pasaje.',
+            **extra,
+        }
+        if imagenes:
+            datos['photos'] = imagenes
+        return _client(church['leader_a']).post(REPORTS_URL, datos, format='multipart')
+
+    def test_admite_varias_imagenes(self, church):
+        res = self._crear(church, [_imagen('a.png'), _imagen('b.png'), _imagen('c.png')])
+
+        assert res.status_code == status.HTTP_201_CREATED
+        assert len(res.data['photos']) == 3
+        # Se conserva el orden en que las eligió.
+        assert [p['position'] for p in res.data['photos']] == [0, 1, 2]
+
+    def test_no_deja_pasar_de_cinco(self, church):
+        from apps.cells.models import CellReport
+
+        res = self._crear(church, [_imagen(f'{i}.png') for i in range(6)])
+
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'hasta 5' in res.data['error']
+        # Y no queda un informe a medias.
+        assert not CellReport.objects.exists()
+
+    def test_un_informe_sin_imagenes_sigue_valiendo(self, church):
+        """El de actividad puede ser sólo texto."""
+        res = self._crear(church, [])
+
+        assert res.status_code == status.HTTP_201_CREATED
+        assert res.data['photos'] == []
+
+    def test_editar_el_texto_no_borra_lo_adjuntado(self, church):
+        creado = self._crear(church, [_imagen('a.png')])
+        report_id = creado.data['id']
+
+        res = _client(church['leader_a']).patch(
+            f'{REPORTS_URL}{report_id}/', {'summary': 'Corregido'}, format='json'
+        )
+
+        assert res.status_code == status.HTTP_200_OK
+        assert len(res.data['photos']) == 1
+
+    def test_volver_a_adjuntar_reemplaza_la_galeria(self, church):
+        """La app manda siempre el conjunto que el líder tiene en pantalla."""
+        creado = self._crear(church, [_imagen('a.png'), _imagen('b.png')])
+        report_id = creado.data['id']
+
+        res = _client(church['leader_a']).patch(
+            f'{REPORTS_URL}{report_id}/', {'photos': [_imagen('c.png')]}, format='multipart'
+        )
+
+        assert res.status_code == status.HTTP_200_OK
+        assert len(res.data['photos']) == 1
+
+
+@pytest.mark.django_db
+class TestInformeDeDevocional:
+    """
+    La constancia de que la célula siguió el plan de lecturas.
+
+    Sigue el mismo camino que el de actividad —borrador, enviar, respuesta del
+    coordinador— y por eso comparten modelo. Lo que cambia es que aquí la
+    captura no es opcional: es lo que se está entregando.
+    """
+
+    def _crear(self, church, imagenes):
+        datos = {
+            'cell': church['cell_a'].id,
+            'kind': 'DEVOTIONAL',
+            'period_start': '2026-08-10',
+            'period_end': '2026-08-10',
+            'summary': 'Leímos Hebreos 13, vinieron seis.',
+        }
+        if imagenes:
+            datos['photos'] = imagenes
+        return _client(church['leader_a']).post(REPORTS_URL, datos, format='multipart')
+
+    def test_se_distingue_del_informe_de_actividad(self, church):
+        res = self._crear(church, [_imagen()])
+
+        assert res.status_code == status.HTTP_201_CREATED
+        assert res.data['kind'] == 'DEVOTIONAL'
+        assert res.data['kind_display'] == 'Devocional'
+
+    def test_se_envia_con_su_captura(self, church):
+        creado = self._crear(church, [_imagen()])
+
+        res = _client(church['leader_a']).post(f'{REPORTS_URL}{creado.data["id"]}/send/')
+        assert res.status_code == status.HTTP_200_OK
+        assert res.data['status'] == 'SENT'
+
+    def test_sin_captura_no_se_puede_enviar(self, church):
+        """Un informe de devocional sin la captura no prueba nada."""
+        creado = self._crear(church, [])
+        assert creado.status_code == status.HTTP_201_CREATED
+
+        res = _client(church['leader_a']).post(f'{REPORTS_URL}{creado.data["id"]}/send/')
+
+        assert res.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'captura' in res.data['error']
+
+    def test_el_de_actividad_si_se_envia_sin_imagenes(self, church):
+        """La exigencia es sólo del de devocional."""
+        creado = _client(church['leader_a']).post(
+            REPORTS_URL,
+            {
+                'cell': church['cell_a'].id,
+                'period_start': '2026-08-10',
+                'period_end': '2026-08-10',
+                'summary': 'Sin fotos esta vez.',
+            },
+            format='json',
+        )
+
+        res = _client(church['leader_a']).post(f'{REPORTS_URL}{creado.data["id"]}/send/')
+        assert res.status_code == status.HTTP_200_OK
+
+    def test_se_pueden_listar_por_separado(self, church):
+        self._crear(church, [_imagen()])
+        _client(church['leader_a']).post(
+            REPORTS_URL,
+            {
+                'cell': church['cell_a'].id,
+                'period_start': '2026-08-11',
+                'period_end': '2026-08-11',
+                'summary': 'De actividad.',
+            },
+            format='json',
+        )
+
+        devocionales = _client(church['leader_a']).get(REPORTS_URL, {'kind': 'DEVOTIONAL'})
+        assert devocionales.data['count'] == 1
+        assert devocionales.data['results'][0]['summary'].startswith('Leímos')
+
+
+@pytest.mark.django_db
+class TestDevocionalesPorLider:
+    """
+    El apartado del panel: los devocionales de cada líder, según el alcance.
+
+    El pastorado ve los de toda la iglesia, el coordinador sólo los de las
+    células que supervisa y el líder los suyos. Es la misma lista de informes
+    de siempre, acotada al tipo y a una semana.
+    """
+
+    def _entregar(self, church, leader, cell, dia, texto='Leímos Hebreos 13.'):
+        """Un devocional entregado: creado con su captura y enviado."""
+        creado = _client(leader).post(
+            REPORTS_URL,
+            {
+                'cell': cell.id,
+                'kind': 'DEVOTIONAL',
+                'period_start': dia,
+                'period_end': dia,
+                'summary': texto,
+                'photos': [_imagen()],
+            },
+            format='multipart',
+        )
+        assert creado.status_code == status.HTTP_201_CREATED, creado.data
+        _client(leader).post(f'{REPORTS_URL}{creado.data["id"]}/send/')
+        return creado.data['id']
+
+    def test_el_pastorado_ve_los_de_todos_sus_lideres(self, church):
+        self._entregar(church, church['leader_a'], church['cell_a'], '2026-08-10')
+        self._entregar(church, church['leader_b'], church['cell_b'], '2026-08-11')
+
+        res = _client(church['pastor']).get(REPORTS_URL, {'kind': 'DEVOTIONAL'})
+
+        assert res.status_code == status.HTTP_200_OK
+        entregados = {r['submitted_by']['email'] for r in res.data['results']}
+        assert entregados == {'lider.a@genesisapp.org', 'lider.b@genesisapp.org'}
+
+    def test_el_lider_solo_ve_el_suyo(self, church):
+        self._entregar(church, church['leader_a'], church['cell_a'], '2026-08-10')
+        self._entregar(church, church['leader_b'], church['cell_b'], '2026-08-11')
+
+        res = _client(church['leader_a']).get(REPORTS_URL, {'kind': 'DEVOTIONAL'})
+
+        assert [r['cell_name'] for r in res.data['results']] == ['Célula A']
+
+    def test_se_puede_seguir_a_un_lider_concreto(self, church):
+        self._entregar(church, church['leader_a'], church['cell_a'], '2026-08-10')
+        self._entregar(church, church['leader_b'], church['cell_b'], '2026-08-11')
+
+        res = _client(church['pastor']).get(
+            REPORTS_URL,
+            {'kind': 'DEVOTIONAL', 'submitted_by': church['leader_b'].id},
+        )
+
+        assert [r['cell_name'] for r in res.data['results']] == ['Célula B']
+
+    def test_se_pide_por_semana(self, church):
+        self._entregar(church, church['leader_a'], church['cell_a'], '2026-08-12')
+        self._entregar(church, church['leader_a'], church['cell_a'], '2026-08-20')
+
+        res = _client(church['pastor']).get(
+            REPORTS_URL,
+            {
+                'kind': 'DEVOTIONAL',
+                'period_start__gte': '2026-08-10',
+                'period_start__lte': '2026-08-16',
+            },
+        )
+
+        assert res.data['count'] == 1
+        assert res.data['results'][0]['period_start'] == '2026-08-12'
+
+    def test_el_de_actividad_no_se_cuela(self, church):
+        self._entregar(church, church['leader_a'], church['cell_a'], '2026-08-10')
+        _client(church['leader_a']).post(
+            REPORTS_URL,
+            {
+                'cell': church['cell_a'].id,
+                'period_start': '2026-08-11',
+                'period_end': '2026-08-11',
+                'summary': 'De actividad.',
+            },
+            format='json',
+        )
+
+        res = _client(church['pastor']).get(REPORTS_URL, {'kind': 'DEVOTIONAL'})
+
+        assert res.data['count'] == 1
+
+    def test_la_semana_entera_cabe_en_una_pagina(self, church):
+        """De a diez, revisar la semana de varias células serían muchos clics."""
+        for dia in range(10, 17):
+            self._entregar(church, church['leader_a'], church['cell_a'], f'2026-08-{dia}')
+        for dia in range(10, 16):
+            self._entregar(church, church['leader_b'], church['cell_b'], f'2026-08-{dia}')
+
+        res = _client(church['pastor']).get(
+            REPORTS_URL, {'kind': 'DEVOTIONAL', 'page_size': 50}
+        )
+
+        assert res.data['count'] == 13
+        assert len(res.data['results']) == 13
+
+    def test_el_telefono_sigue_recibiendo_de_a_diez(self, church):
+        """Sin pedir tamaño, la página no cambia para quien ya la usaba."""
+        for dia in range(10, 23):
+            self._entregar(church, church['leader_a'], church['cell_a'], f'2026-08-{dia}')
+
+        res = _client(church['leader_a']).get(REPORTS_URL, {'kind': 'DEVOTIONAL'})
+
+        assert len(res.data['results']) == 10
+
+
+@pytest.mark.django_db
+class TestPeticionesMalFormadas:
+    """
+    Una petición mal escrita se rechaza; no tumba el servidor.
+
+    La célula llegaba como texto y se convertía a número sin más. Un `cell`
+    con letras —un error de la app, o alguien probando— reventaba con un 500 y
+    dejaba la traza entera en el registro.
+    """
+
+    @pytest.mark.parametrize('url', [REPORTS_URL, MEETINGS_URL, FOLLOWUPS_URL])
+    def test_una_celula_que_no_es_numero_no_rompe(self, church, url):
+        res = _client(church['leader_a']).post(
+            url,
+            {
+                'cell': 'abc',
+                'period_start': '2026-08-10',
+                'period_end': '2026-08-10',
+                'date': '2026-08-10',
+                'summary': 'Nos reunimos.',
+            },
+            format='json',
+        )
+
+        assert res.status_code < 500, res.status_code

@@ -81,18 +81,25 @@ abstract class LeaderRepository {
 
   Future<Paged<CellReport>> getReports(int cellId, {int page});
 
-  /// Guarda el informe como borrador. `photoPath` adjunta una foto del equipo.
+  /// Guarda el informe como borrador.
+  ///
+  /// [photoPaths] son las imágenes elegidas en el teléfono, hasta cinco. Si va
+  /// vacío no se toca lo ya adjuntado: así, corregir el texto de un borrador
+  /// no borra en silencio sus fotos.
+  ///
+  /// [kind] distingue el informe de actividad del de devocional, que es la
+  /// constancia de que la célula siguió el plan de lecturas.
   Future<CellReport> saveReport({
     required int cellId,
     int? reportId,
+    required String kind,
     required String periodStart,
     required String periodEnd,
     required String summary,
     String highlights,
     String challenges,
     String prayerNeeds,
-    String photoCaption,
-    String? photoPath,
+    List<String> photoPaths,
   });
 
   /// Entrega el informe a la supervisión y congela sus cifras.

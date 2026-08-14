@@ -8,10 +8,11 @@ el pastor toda la iglesia. Escribir la URL de una célula ajena devuelve 404 o
 """
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -25,9 +26,10 @@ from apps.roles.scope import (
 from .models import (
     Attendance,
     AttendanceStatus,
-    CellGroup,
     CellMeeting,
     CellReport,
+    CellReportKind,
+    CellReportPhoto,
     CellReportStatus,
     MemberFollowUp,
 )
@@ -73,6 +75,20 @@ class ScopedCellResourceMixin:
             status=status.HTTP_403_FORBIDDEN,
         )
 
+    def _requested_cell_id(self, request):
+        """
+        La célula que trae la petición, o None si no viene o no es un número.
+
+        Un `cell` con letras es una petición mal formada. Devolviendo None se
+        comprueba el alcance igual —ninguna célula queda a cargo de nadie, así
+        que se rechaza con un 403— en lugar de romper el servidor al
+        convertirlo.
+        """
+        try:
+            return int(request.data.get('cell'))
+        except (TypeError, ValueError):
+            return None
+
 
 class CellMeetingViewSet(ScopedCellResourceMixin, viewsets.ModelViewSet):
     """Reuniones realizadas por la célula."""
@@ -106,8 +122,7 @@ class CellMeetingViewSet(ScopedCellResourceMixin, viewsets.ModelViewSet):
         return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
-        cell_id = request.data.get('cell')
-        if not can_manage_cell(request.user, int(cell_id) if cell_id else None):
+        if not can_manage_cell(request.user, self._requested_cell_id(request)):
             return self._deny_out_of_scope()
         return super().create(request, *args, **kwargs)
 
@@ -192,8 +207,7 @@ class MemberFollowUpViewSet(ScopedCellResourceMixin, viewsets.ModelViewSet):
     }
 
     def create(self, request, *args, **kwargs):
-        cell_id = request.data.get('cell')
-        if not can_manage_cell(request.user, int(cell_id) if cell_id else None):
+        if not can_manage_cell(request.user, self._requested_cell_id(request)):
             return self._deny_out_of_scope()
         return super().create(request, *args, **kwargs)
 
@@ -216,6 +230,19 @@ class MemberFollowUpViewSet(ScopedCellResourceMixin, viewsets.ModelViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
+class InformesPagination(PageNumberPagination):
+    """
+    Paginación de informes, con tamaño a pedido.
+
+    El panel muestra la semana entera de todas las células que supervisa y de
+    a diez páginas se le iría en clics. El teléfono no manda el parámetro y
+    sigue recibiendo diez.
+    """
+
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class CellReportViewSet(ScopedCellResourceMixin, viewsets.ModelViewSet):
     """
     Informes de actividad de la célula.
@@ -225,9 +252,21 @@ class CellReportViewSet(ScopedCellResourceMixin, viewsets.ModelViewSet):
     lo que se revisa sea lo que se entregó.
     """
 
-    queryset = CellReport.objects.select_related('cell', 'submitted_by', 'reviewed_by')
+    queryset = CellReport.objects.select_related(
+        'cell', 'submitted_by', 'reviewed_by'
+    ).prefetch_related('photos')
     serializer_class = CellReportSerializer
-    filterset_fields = ['cell', 'status']
+    pagination_class = InformesPagination
+    # Con rangos de fecha, para poder pedir «la semana del 10 al 16» y por
+    # quién lo entregó, para seguir a un líder concreto.
+    filterset_fields = {
+        'cell': ['exact'],
+        'status': ['exact'],
+        'kind': ['exact'],
+        'submitted_by': ['exact'],
+        'period_start': ['exact', 'gte', 'lte'],
+        'period_end': ['exact', 'gte', 'lte'],
+    }
     ordering = ['-period_end']
 
     perm_map = {
@@ -242,13 +281,74 @@ class CellReportViewSet(ScopedCellResourceMixin, viewsets.ModelViewSet):
     }
 
     def create(self, request, *args, **kwargs):
-        cell_id = request.data.get('cell')
-        if not can_manage_cell(request.user, int(cell_id) if cell_id else None):
+        if not can_manage_cell(request.user, self._requested_cell_id(request)):
             return self._deny_out_of_scope()
+
+        exceso = self._too_many_photos(request)
+        if exceso:
+            return exceso
+
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        serializer.save(submitted_by=self.request.user)
+        report = serializer.save(submitted_by=self.request.user)
+        self._save_photos(report)
+
+    def perform_update(self, serializer):
+        report = serializer.save()
+        self._save_photos(report)
+
+    # ── Imágenes del informe ────────────────────────────────────────────────
+    #
+    # Llegan como varios archivos bajo el mismo nombre, `photos`, y los pies de
+    # foto en `photo_captions` en el mismo orden. El informe llevaba una sola
+    # imagen: una reunión no se cuenta bien con una, y el informe de devocional
+    # es justamente una captura.
+
+    def _uploaded_photos(self, request):
+        return request.FILES.getlist('photos') if hasattr(request, 'FILES') else []
+
+    def _too_many_photos(self, request):
+        """Corta antes de guardar nada si se pasan del tope."""
+        if len(self._uploaded_photos(request)) > CellReportPhoto.MAX_PER_REPORT:
+            return Response(
+                {'error': f'Puedes adjuntar hasta {CellReportPhoto.MAX_PER_REPORT} imágenes.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return None
+
+    def _save_photos(self, report):
+        """
+        Guarda las imágenes que vengan en la petición.
+
+        Sin archivos no se toca nada: así, editar el texto de un borrador no
+        borra en silencio lo que ya se había adjuntado. Cuando sí vienen, se
+        reemplaza la galería entera, porque la app manda siempre el conjunto
+        completo de lo que el líder tiene en pantalla.
+        """
+        archivos = self._uploaded_photos(self.request)
+        if not archivos:
+            return
+
+        pies = self.request.data.getlist('photo_captions') \
+            if hasattr(self.request.data, 'getlist') else []
+
+        # Borrar la fila no borra el archivo. Corregir un borrador varias veces
+        # iría dejando imágenes que ya no muestra nadie ocupando el disco.
+        anteriores = list(report.photos.all())
+        report.photos.all().delete()
+        for anterior in anteriores:
+            anterior.image.delete(save=False)
+
+        CellReportPhoto.objects.bulk_create([
+            CellReportPhoto(
+                report=report,
+                image=archivo,
+                caption=pies[indice] if indice < len(pies) else '',
+                position=indice,
+            )
+            for indice, archivo in enumerate(archivos)
+        ])
 
     def _guard_editable(self, request):
         """Un informe ya enviado o revisado queda cerrado."""
@@ -265,11 +365,11 @@ class CellReportViewSet(ScopedCellResourceMixin, viewsets.ModelViewSet):
         return None
 
     def update(self, request, *args, **kwargs):
-        blocked = self._guard_editable(request)
+        blocked = self._guard_editable(request) or self._too_many_photos(request)
         return blocked or super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
-        blocked = self._guard_editable(request)
+        blocked = self._guard_editable(request) or self._too_many_photos(request)
         return blocked or super().partial_update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
@@ -292,6 +392,14 @@ class CellReportViewSet(ScopedCellResourceMixin, viewsets.ModelViewSet):
         if report.status != CellReportStatus.DRAFT:
             return Response(
                 {"error": "Este informe ya fue enviado."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # El informe de devocional es la constancia de que la célula siguió el
+        # plan, y esa constancia es la captura. Sin ella no dice nada.
+        if report.kind == CellReportKind.DEVOTIONAL and not report.photos.exists():
+            return Response(
+                {"error": "Adjunta la captura del devocional antes de enviarlo."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -510,7 +618,6 @@ class CellManagementMixin:
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        from apps.roles.permissions import HasAppPermission as _HasAppPermission
         from apps.roles.utils import has_any_permission
 
         if not has_any_permission(request.user, ['MEMBERS_REGISTER']):

@@ -19,8 +19,10 @@ import {
   TrendingUp,
   FileText,
   Image as ImageIcon,
+  BookOpen,
   X,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { usePermissions } from '../store/authStore';
 import { CellGroup, MEETING_DAY_LABELS } from '../features/cells/types';
@@ -35,7 +37,10 @@ import {
   FollowUpType,
   MembersResponse,
   CellReport,
+  CellReportKind,
+  REPORT_KIND,
   REPORT_STATUS,
+  reportImages,
   formatDate,
 } from '../features/cells/management';
 
@@ -770,9 +775,10 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
   const [showForm, setShowForm] = useState(false);
   const [answering, setAnswering] = useState<number | null>(null);
   const [answer, setAnswer] = useState('');
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [zoom, setZoom] = useState<string | null>(null);
+  const [kind, setKind] = useState<CellReportKind>('ACTIVITY');
   const [form, setForm] = useState({
     period_start: '',
     period_end: '',
@@ -780,35 +786,57 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
     highlights: '',
     challenges: '',
     prayer_needs: '',
-    photo_caption: '',
   });
 
   const EMPTY = {
     period_start: '', period_end: '', summary: '',
-    highlights: '', challenges: '', prayer_needs: '', photo_caption: '',
+    highlights: '', challenges: '', prayer_needs: '',
   };
+
+  /** El mismo tope que guarda el servidor. */
+  const MAX_PHOTOS = 5;
+  const esDevocional = kind === 'DEVOTIONAL';
 
   const { data: reports } = useQuery<{ results: CellReport[] }>({
     queryKey: ['cell-reports', cellId],
     queryFn: async () => (await apiClient.get('/cell-reports/', { params: { cell: cellId } })).data,
   });
 
-  const pickPhoto = (file: File | null) => {
-    setPhoto(file);
-    if (photoPreview) URL.revokeObjectURL(photoPreview);
-    setPhotoPreview(file ? URL.createObjectURL(file) : null);
+  /** Añade las elegidas sin pasar del tope, y libera las vistas previas que
+   *  se dejan de usar: son objetos del navegador que no se recogen solos. */
+  const addPhotos = (files: FileList | null) => {
+    if (!files?.length) return;
+    const caben = MAX_PHOTOS - photos.length;
+    if (caben <= 0) return;
+    const nuevas = Array.from(files).slice(0, caben);
+    setPhotos((previas) => [...previas, ...nuevas]);
+    setPreviews((previas) => [...previas, ...nuevas.map((f) => URL.createObjectURL(f))]);
+  };
+
+  const removePhoto = (index: number) => {
+    URL.revokeObjectURL(previews[index]);
+    setPhotos((previas) => previas.filter((_, i) => i !== index));
+    setPreviews((previas) => previas.filter((_, i) => i !== index));
+  };
+
+  const clearPhotos = () => {
+    previews.forEach((url) => URL.revokeObjectURL(url));
+    setPhotos([]);
+    setPreviews([]);
   };
 
   const create = useMutation({
     mutationFn: async () => {
-      // Con imagen la petición va como formulario; sin ella, como JSON.
-      if (!photo) {
-        return apiClient.post('/cell-reports/', { cell: cellId, ...form });
+      // Con imágenes la petición va como formulario; sin ellas, como JSON.
+      if (!photos.length) {
+        return apiClient.post('/cell-reports/', { cell: cellId, kind, ...form });
       }
       const data = new FormData();
       data.append('cell', String(cellId));
+      data.append('kind', kind);
       Object.entries(form).forEach(([key, value]) => data.append(key, value));
-      data.append('photo', photo);
+      // Todas bajo el mismo nombre: así las recoge el servidor en lote.
+      photos.forEach((file) => data.append('photos', file));
       return apiClient.post('/cell-reports/', data, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -816,7 +844,7 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
     onSuccess: () => {
       onDone('Informe guardado como borrador. Revísalo y envíalo cuando esté listo.');
       setForm(EMPTY);
-      pickPhoto(null);
+      clearPhotos();
       setShowForm(false);
     },
     onError,
@@ -841,8 +869,19 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
 
   return (
     <div className="space-y-4">
-      {canWrite && (
-        <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {/* Esta pestaña es de una célula. Para repasar el devocional de todas
+            las que se supervisan, de un vistazo, está el apartado propio. */}
+        {can('CELL_REPORTS_VIEW') && (
+        <Link
+          to="/devocionales/reportes"
+          className="flex items-center gap-2 btn-secondary text-xs font-bold"
+        >
+          <BookOpen size={14} />
+          Devocionales de los líderes
+        </Link>
+        )}
+        {canWrite && (
           <button
             onClick={() => setShowForm((v) => !v)}
             className="flex items-center gap-2 btn-primary text-xs font-bold"
@@ -850,73 +889,123 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
             <Plus size={14} />
             {showForm ? 'Cancelar' : 'Nuevo informe'}
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {showForm && canWrite && (
         <div className="glass-panel p-5 space-y-3">
-          <h3 className="text-sm font-bold text-crema">¿Cómo le fue a tu célula?</h3>
+          <h3 className="text-sm font-bold text-crema">
+            {esDevocional ? '¿Qué leyeron esta semana?' : '¿Cómo le fue a tu célula?'}
+          </h3>
+
+          {/* Son dos entregas distintas y cada una pide cosas distintas, así
+              que se decide antes de escribir y no a mitad del formulario. */}
+          <div className="flex gap-2">
+            {(Object.keys(REPORT_KIND) as CellReportKind[]).map((opcion) => (
+              <button
+                key={opcion}
+                type="button"
+                onClick={() => setKind(opcion)}
+                className={`text-[11px] px-3 py-1.5 rounded-lg border font-semibold transition-all ${
+                  kind === opcion
+                    ? 'bg-dorado/20 text-dorado border-dorado/50'
+                    : 'bg-white/5 text-crema/55 border-white/10 hover:border-white/25'
+                }`}
+              >
+                {REPORT_KIND[opcion].label}
+              </button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field label="Desde *" type="date" value={form.period_start} onChange={(v) => setForm({ ...form, period_start: v })} />
             <Field label="Hasta *" type="date" value={form.period_end} onChange={(v) => setForm({ ...form, period_end: v })} />
           </div>
-          <Field label="Resumen del periodo *" value={form.summary} onChange={(v) => setForm({ ...form, summary: v })} multiline />
-          <Field label="Lo más destacado" value={form.highlights} onChange={(v) => setForm({ ...form, highlights: v })} multiline />
-          <Field label="Dificultades" value={form.challenges} onChange={(v) => setForm({ ...form, challenges: v })} multiline />
-          <Field label="Motivos de oración" value={form.prayer_needs} onChange={(v) => setForm({ ...form, prayer_needs: v })} multiline />
+          <Field
+            label={esDevocional ? 'Qué leyeron *' : 'Resumen del periodo *'}
+            value={form.summary}
+            onChange={(v) => setForm({ ...form, summary: v })}
+            multiline
+          />
 
-          {/* Foto de la actividad: al coordinador le dice más que el texto */}
+          {/* El devocional se entrega corto: el pasaje, unas líneas y la
+              captura. Los apartados del informe de actividad sobran ahí. */}
+          {!esDevocional && (
+            <>
+              <Field label="Lo más destacado" value={form.highlights} onChange={(v) => setForm({ ...form, highlights: v })} multiline />
+              <Field label="Dificultades" value={form.challenges} onChange={(v) => setForm({ ...form, challenges: v })} multiline />
+              <Field label="Motivos de oración" value={form.prayer_needs} onChange={(v) => setForm({ ...form, prayer_needs: v })} multiline />
+            </>
+          )}
+
+          {/* Las imágenes: al coordinador le dicen más que el texto */}
           <div className="space-y-2">
             <label className="block text-[10px] font-semibold text-crema text-opacity-65 ml-1">
-              Foto de la actividad (opcional)
+              {esDevocional
+                ? 'Captura de la lectura *'
+                : `Fotos de la actividad (hasta ${MAX_PHOTOS}, opcional)`}
             </label>
 
-            {photoPreview ? (
-              <div className="relative inline-block">
-                <img
-                  src={photoPreview}
-                  alt="Vista previa"
-                  className="max-h-48 rounded-xl border border-white border-opacity-10"
-                />
-                <button
-                  onClick={() => pickPhoto(null)}
-                  title="Quitar la foto"
-                  className="absolute -top-2 -right-2 p-1.5 rounded-full bg-error-red text-white shadow-lg"
-                >
-                  <X size={12} />
-                </button>
+            {previews.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {previews.map((url, index) => (
+                  <div key={url} className="relative">
+                    <img
+                      src={url}
+                      alt={`Imagen ${index + 1}`}
+                      className="h-28 w-28 object-cover rounded-xl border border-white border-opacity-10"
+                    />
+                    <button
+                      onClick={() => removePhoto(index)}
+                      title="Quitar la imagen"
+                      className="absolute -top-2 -right-2 p-1.5 rounded-full bg-error-red text-white shadow-lg"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
               </div>
-            ) : (
+            )}
+
+            {photos.length < MAX_PHOTOS && (
               <label className="flex flex-col items-center justify-center gap-2 px-4 py-6 border border-dashed border-white border-opacity-15 rounded-xl cursor-pointer hover:border-dorado hover:border-opacity-50 transition-all">
                 <ImageIcon size={22} className="text-crema text-opacity-35" />
                 <span className="text-[11px] text-crema text-opacity-50">
-                  Toca para elegir una imagen de la reunión
+                  {esDevocional
+                    ? 'Toca para adjuntar la captura de la lectura'
+                    : photos.length
+                      ? `Añadir otra imagen (te quedan ${MAX_PHOTOS - photos.length})`
+                      : 'Toca para elegir una o varias imágenes de la reunión'}
                 </span>
                 <input
                   type="file"
                   accept="image/*"
+                  multiple={!esDevocional}
                   className="hidden"
-                  onChange={(e) => pickPhoto(e.target.files?.[0] ?? null)}
+                  onChange={(e) => {
+                    addPhotos(e.target.files);
+                    // Permite volver a elegir el mismo archivo tras quitarlo.
+                    e.target.value = '';
+                  }}
                 />
               </label>
-            )}
-
-            {photo && (
-              <Field
-                label="Pie de foto"
-                value={form.photo_caption}
-                onChange={(v) => setForm({ ...form, photo_caption: v })}
-              />
             )}
           </div>
 
           <p className="text-[10px] text-crema text-opacity-40">
-            Las cifras del periodo (reuniones, asistencia media e integrantes nuevos) se calculan
-            solas al enviar el informe.
+            {esDevocional
+              ? 'La captura es la constancia de la lectura: sin ella no se puede enviar el reporte.'
+              : 'Se guarda como borrador y lo envías cuando esté listo.'}
           </p>
           <button
             onClick={() => create.mutate()}
-            disabled={create.isPending || !form.period_start || !form.period_end || !form.summary.trim()}
+            disabled={
+              create.isPending ||
+              !form.period_start ||
+              !form.period_end ||
+              !form.summary.trim() ||
+              (esDevocional && !photos.length)
+            }
             className="btn-primary text-xs font-bold disabled:opacity-40"
           >
             {create.isPending ? 'Guardando…' : 'Guardar borrador'}
@@ -951,9 +1040,16 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
                     </p>
                   )}
                 </div>
-                <span className={`text-[10px] px-2.5 py-1 rounded-full border ${REPORT_STATUS[report.status].classes}`}>
-                  {REPORT_STATUS[report.status].label}
-                </span>
+                <div className="flex items-center gap-1.5">
+                  {report.kind === 'DEVOTIONAL' && (
+                    <span className={`text-[10px] px-2.5 py-1 rounded-full border ${REPORT_KIND.DEVOTIONAL.classes}`}>
+                      {report.kind_display || REPORT_KIND.DEVOTIONAL.label}
+                    </span>
+                  )}
+                  <span className={`text-[10px] px-2.5 py-1 rounded-full border ${REPORT_STATUS[report.status].classes}`}>
+                    {REPORT_STATUS[report.status].label}
+                  </span>
+                </div>
               </div>
 
               {/* El informe ya no lleva cifras adjuntas: no las leía nadie y,
@@ -961,27 +1057,41 @@ const ReportsTab: React.FC<ReportsTabProps> = ({ cellId, canManage, onDone, onEr
                   cero. Los indicadores vivos están en la pestaña de
                   estadísticas de la célula. */}
               <div className="space-y-2 text-[11px] leading-relaxed">
-                <Block title="Resumen" text={report.summary} />
+                <Block title={report.kind === 'DEVOTIONAL' ? 'Lectura' : 'Resumen'} text={report.summary} />
                 <Block title="Lo destacado" text={report.highlights} />
                 <Block title="Dificultades" text={report.challenges} />
                 <Block title="Motivos de oración" text={report.prayer_needs} />
               </div>
 
-              {/* La foto de la actividad, tal como la ve quien revisa */}
-              {report.photo_url && (
+              {/* Las imágenes del informe, tal como las ve quien revisa. Una
+                  sola se muestra entera; varias, en cuadrícula. */}
+              {reportImages(report).length > 0 && (
                 <div className="space-y-1.5">
-                  <button
-                    onClick={() => setZoom(report.photo_url)}
-                    className="block w-full rounded-xl overflow-hidden border border-white border-opacity-10 hover:border-dorado hover:border-opacity-40 transition-all"
-                    title="Ampliar"
+                  <div
+                    className={
+                      reportImages(report).length === 1
+                        ? ''
+                        : 'grid grid-cols-2 sm:grid-cols-3 gap-2'
+                    }
                   >
-                    <img
-                      src={report.photo_url}
-                      alt={report.photo_caption || 'Foto de la actividad'}
-                      className="w-full max-h-72 object-cover"
-                      loading="lazy"
-                    />
-                  </button>
+                    {reportImages(report).map((url, index) => (
+                      <button
+                        key={url}
+                        onClick={() => setZoom(url)}
+                        className="block w-full rounded-xl overflow-hidden border border-white border-opacity-10 hover:border-dorado hover:border-opacity-40 transition-all"
+                        title="Ampliar"
+                      >
+                        <img
+                          src={url}
+                          alt={report.photo_caption || `Imagen ${index + 1} del informe`}
+                          className={`w-full object-cover ${
+                            reportImages(report).length === 1 ? 'max-h-72' : 'h-32'
+                          }`}
+                          loading="lazy"
+                        />
+                      </button>
+                    ))}
+                  </div>
                   {report.photo_caption && (
                     <p className="text-[10px] text-crema text-opacity-45 italic text-center">
                       {report.photo_caption}

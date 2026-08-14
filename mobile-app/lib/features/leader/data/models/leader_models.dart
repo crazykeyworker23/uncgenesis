@@ -325,6 +325,41 @@ class MemberFollowUp {
   }
 }
 
+/// De qué informa el líder.
+///
+/// Los dos siguen el mismo camino —borrador, enviar, respuesta del
+/// coordinador—. Lo que cambia es qué se pide: el de actividad cuenta cómo fue
+/// la reunión, y el de devocional es la constancia de que la célula siguió el
+/// plan de lecturas, con su captura.
+class CellReportKind {
+  CellReportKind._();
+
+  static const String activity = 'ACTIVITY';
+  static const String devotional = 'DEVOTIONAL';
+
+  static const Map<String, String> labels = {
+    activity: 'Actividad',
+    devotional: 'Devocional',
+  };
+
+  static String label(String? kind) => labels[kind] ?? 'Actividad';
+}
+
+/// Una imagen adjunta al informe.
+class ReportPhoto {
+  final int id;
+  final String url;
+  final String caption;
+
+  const ReportPhoto({required this.id, required this.url, this.caption = ''});
+
+  factory ReportPhoto.fromJson(Map<String, dynamic> json) => ReportPhoto(
+        id: _int(json['id']),
+        url: _text(json['url']) ?? '',
+        caption: json['caption'] as String? ?? '',
+      );
+}
+
 /// Estados por los que pasa un informe.
 class CellReportStatus {
   CellReportStatus._();
@@ -353,6 +388,15 @@ class CellReport {
   final String highlights;
   final String challenges;
   final String prayerNeeds;
+  final String kind;
+
+  /// Las imágenes del informe. Hasta cinco.
+  ///
+  /// Antes era una sola foto: una reunión no se cuenta bien con una imagen, y
+  /// el informe de devocional es justamente una captura.
+  final List<ReportPhoto> photos;
+
+  /// La foto única de los informes entregados antes del cambio.
   final String? photoUrl;
   final String photoCaption;
   final String status;
@@ -369,6 +413,8 @@ class CellReport {
     required this.periodStart,
     required this.periodEnd,
     required this.summary,
+    this.kind = CellReportKind.activity,
+    this.photos = const [],
     this.highlights = '',
     this.challenges = '',
     this.prayerNeeds = '',
@@ -391,6 +437,8 @@ class CellReport {
       periodStart: json['period_start'] as String? ?? '',
       periodEnd: json['period_end'] as String? ?? '',
       summary: json['summary'] as String? ?? '',
+      kind: json['kind'] as String? ?? CellReportKind.activity,
+      photos: _list(json['photos']).map(ReportPhoto.fromJson).toList(),
       highlights: json['highlights'] as String? ?? '',
       challenges: json['challenges'] as String? ?? '',
       prayerNeeds: json['prayer_needs'] as String? ?? '',
@@ -410,6 +458,14 @@ class CellReport {
   bool get isDraft => status == CellReportStatus.draft;
 
   bool get hasReply => reviewNotes.trim().isNotEmpty;
+
+  bool get isDevotional => kind == CellReportKind.devotional;
+
+  /// Todo lo que hay que mostrar, contando la foto única de los antiguos.
+  List<String> get imageUrls => [
+        ...photos.map((p) => p.url).where((url) => url.isNotEmpty),
+        if (photos.isEmpty && photoUrl != null) photoUrl!,
+      ];
 }
 
 /// Un punto de la evolución de asistencia.

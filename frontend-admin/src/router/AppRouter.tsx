@@ -10,6 +10,7 @@ import { ServiceForm } from '../pages/ServiceForm';
 import { DevotionalList } from '../pages/DevotionalList';
 import { DevotionalForm } from '../pages/DevotionalForm';
 import { DevotionalWeeklyPlan } from '../pages/DevotionalWeeklyPlan';
+import { DevotionalLeaderReports } from '../pages/DevotionalLeaderReports';
 import { EventList } from '../pages/EventList';
 import { EventForm } from '../pages/EventForm';
 import { CellList } from '../pages/CellList';
@@ -68,6 +69,12 @@ export default function AppRouter() {
           {/* Devotionals Routes */}
           <Route element={<ProtectedRoute permission="DEVOTIONALS_VIEW" />}>
             <Route path="/devocionales" element={<DevotionalList />} />
+          </Route>
+          {/* Los devocionales que reportan los líderes. Pide el permiso de
+              informes, no el de devocionales: los datos son los informes de
+              las células, recortados al alcance de cada quien. */}
+          <Route element={<ProtectedRoute permission="CELL_REPORTS_VIEW" />}>
+            <Route path="/devocionales/reportes" element={<DevotionalLeaderReports />} />
           </Route>
           <Route element={<ProtectedRoute permission={['DEVOTIONALS_CREATE', 'DEVOTIONALS_EDIT']} />}>
             {/* Antes que «/devocionales/nuevo» no importa: son rutas distintas,

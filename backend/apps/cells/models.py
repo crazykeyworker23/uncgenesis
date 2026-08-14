@@ -179,17 +179,35 @@ class CellReportStatus(models.TextChoices):
     REVIEWED = 'REVIEWED', 'Revisado'
 
 
+class CellReportKind(models.TextChoices):
+    """
+    De qué informa el líder.
+
+    Los dos siguen el mismo camino —borrador, enviar, respuesta del
+    coordinador— y por eso comparten modelo. Lo que cambia es qué se pide: el
+    de actividad cuenta cómo fue la reunión, y el de devocional es la
+    constancia de que la célula siguió el plan de lecturas, con su captura.
+    """
+
+    ACTIVITY = 'ACTIVITY', 'Actividad de la célula'
+    DEVOTIONAL = 'DEVOTIONAL', 'Devocional'
+
+
 class CellReport(models.Model):
     """
-    Informe de actividad que el líder envía sobre su célula.
+    Informe que el líder envía sobre su célula.
 
-    Cierra el ciclo de supervisión: el líder cuenta cómo le fue en el periodo,
-    y su coordinador —o el pastorado— lo lee y responde. Junto al texto se
-    guarda una foto de las cifras del periodo, para que el informe siga siendo
-    fiel aunque los datos cambien después.
+    Cierra el ciclo de supervisión: el líder cuenta cómo le fue el día del que
+    informa, y su coordinador —o el pastorado— lo lee y responde.
     """
 
     cell = models.ForeignKey(CellGroup, on_delete=models.CASCADE, related_name='reports')
+    kind = models.CharField(
+        max_length=20,
+        choices=CellReportKind.choices,
+        default=CellReportKind.ACTIVITY,
+        db_index=True,
+    )
     period_start = models.DateField()
     period_end = models.DateField()
 
@@ -198,8 +216,9 @@ class CellReport(models.Model):
     challenges = models.TextField(blank=True, verbose_name='dificultades')
     prayer_needs = models.TextField(blank=True, verbose_name='motivos de oración')
 
-    # Una foto de la actividad: al coordinador le dice más de la reunión que
-    # cualquier resumen escrito.
+    # La foto única con la que empezó esto. Se conserva porque los informes ya
+    # entregados la tienen; los nuevos usan la galería de `CellReportPhoto`,
+    # que admite varias.
     photo = models.ImageField(upload_to='cell_reports/', blank=True, null=True)
     photo_caption = models.CharField(max_length=255, blank=True, verbose_name='pie de foto')
 
@@ -250,3 +269,34 @@ class CellReport(models.Model):
 
     def __str__(self):
         return f"{self.cell.name} · {self.period_start} a {self.period_end}"
+
+
+class CellReportPhoto(models.Model):
+    """
+    Una imagen del informe.
+
+    El informe llevaba una sola foto. Una reunión no se cuenta bien con una
+    imagen: el líder quiere mostrar a la gente, lo que estudiaron y el momento
+    de oración. Y el informe de devocional es justamente una captura.
+
+    El tope de cinco no es capricho: cada foto ronda los dos megas, y el líder
+    las sube desde su teléfono, muchas veces con datos móviles.
+    """
+
+    #: Cuántas admite un informe. Lo comprueba también la API al recibirlas.
+    MAX_PER_REPORT = 5
+
+    report = models.ForeignKey(CellReport, on_delete=models.CASCADE, related_name='photos')
+    image = models.ImageField(upload_to='cell_reports/')
+    caption = models.CharField(max_length=255, blank=True, verbose_name='pie de foto')
+    #: Para respetar el orden en que el líder las eligió.
+    position = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['position', 'id']
+        verbose_name = 'imagen de informe'
+        verbose_name_plural = 'imágenes de informe'
+
+    def __str__(self):
+        return f"Imagen {self.position + 1} de {self.report_id}"
