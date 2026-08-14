@@ -1,4 +1,4 @@
-from rest_framework import generics, permissions
+from rest_framework import generics
 from apps.audit.models import AuditLog
 from apps.audit.serializers import AuditLogSerializer
 from apps.roles.permissions import HasAppPermission

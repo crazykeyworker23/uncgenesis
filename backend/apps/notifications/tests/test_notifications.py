@@ -3,8 +3,8 @@ from django.urls import reverse
 from rest_framework import status
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from apps.notifications.models import FCMDevice, Notification, DeviceType, TargetAudience, NotificationStatus
-from apps.roles.models import Role, RoleType, UserRole
+from apps.notifications.models import FCMDevice, Notification, NotificationStatus
+from apps.roles.models import Role, RoleType
 
 User = get_user_model()
 

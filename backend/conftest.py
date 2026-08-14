@@ -7,6 +7,20 @@ User = get_user_model()
 
 
 @pytest.fixture(autouse=True)
+def media_de_prueba(settings, tmp_path):
+    """
+    Las imágenes de las pruebas no se guardan junto a las de la iglesia.
+
+    Cada informe con captura escribía su archivo en `media/`, el mismo sitio
+    donde vive lo que sube la gente de verdad, y ahí se quedaban: al cabo de
+    unas cuantas ejecuciones había cientos de `a.png`, `b.png`… en el
+    repositorio. Con esto cada ejecución escribe en su carpeta temporal, que
+    pytest borra al terminar.
+    """
+    settings.MEDIA_ROOT = str(tmp_path / 'media')
+
+
+@pytest.fixture(autouse=True)
 def sin_envio_push_real(settings):
     """
     Las pruebas no envían notificaciones de verdad.

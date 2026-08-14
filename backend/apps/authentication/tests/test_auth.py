@@ -34,7 +34,7 @@ class TestAuthentication:
 
     def test_user_login_success(self, api_client, create_user, test_password):
         email = "loginuser@genesisapp.org"
-        user = create_user(email=email)
+        create_user(email=email)
         
         url = reverse('auth_login')
         response = api_client.post(url, {

@@ -3,8 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from apps.events.models import Event, EventRegistration, EventRegistrationStatus, EventStatus
-from apps.audit.models import AuditLog
+from apps.events.models import Event, EventStatus
 
 User = get_user_model()
 

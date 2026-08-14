@@ -3,10 +3,9 @@ from django.urls import reverse
 from rest_framework import status
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory
-from apps.settings_app.models import AppSettings, ChurchSettings
+from apps.settings_app.models import AppSettings
 from apps.audit.models import AuditLog
 from apps.audit.services import log_action
-from apps.roles.models import Role, RoleType, UserRole
 
 User = get_user_model()
 
@@ -37,8 +36,6 @@ class TestSettingsAndAudit:
         user = create_user(email="member@genesisapp.org")
         
         # Authenticate
-        api_client.credentials(HTTP_AUTHORIZATION=f'Bearer token') # We mock or use standard auth
-        # Let's generate a real JWT token for this user
         from rest_framework_simplejwt.tokens import RefreshToken
         refresh = RefreshToken.for_user(user)
         api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')

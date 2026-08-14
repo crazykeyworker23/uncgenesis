@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from apps.events.models import Event, EventRegistration, EventRegistrationStatus
+from apps.events.models import Event, EventRegistration
 from apps.authentication.serializers import UserMeSerializer
 
 

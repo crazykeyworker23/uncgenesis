@@ -170,7 +170,7 @@ class ForgotPasswordView(APIView):
         token = default_token_generator.make_token(user)
         
         # Enviar correo de recuperación
-        reset_link = f"{settings.CORS_ALLOWED_ORIGINS[0]}/reset-password?uid={uid}&token={token}"
+        reset_link = f"{settings.FRONTEND_URL}/reset-password?uid={uid}&token={token}"
         
         # Intentamos enviar el correo electrónico
         try:
@@ -202,8 +202,7 @@ class ResetPasswordView(APIView):
         serializer = ResetPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        uidb64 = serializer.validated_data['token'] # Recibimos el token completo codificado uidb64:token
-        # O también podemos permitir recibir uidb64 y token separados en la petición
+        # El uid y el token llegan por separado en la petición.
         uid = request.data.get('uid')
         token = request.data.get('token')
         

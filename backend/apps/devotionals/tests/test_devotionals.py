@@ -281,3 +281,26 @@ class TestPublicarPlanSemanal:
     def test_sin_fecha_avisa(self, staff_client):
         res = staff_client.post(PUBLISH_WEEK_URL, {}, format='json')
         assert res.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+class TestFechasImposibles:
+    """
+    Una fecha que no existe se rechaza; no tumba el servidor.
+
+    Un 31 de febrero está bien escrito pero no es un día: el lector de fechas
+    de Django lanza en ese caso, y la petición se caía con un 500 en lugar de
+    contestar que la fecha no vale.
+    """
+
+    @pytest.mark.parametrize('fecha', ['2026-02-31', '2026-13-01', 'cualquier-cosa'])
+    def test_al_leer_la_semana(self, staff_client, fecha):
+        res = staff_client.get(WEEKLY_PLAN_URL, {'start_date': fecha})
+
+        assert res.status_code == status.HTTP_400_BAD_REQUEST, res.status_code
+
+    @pytest.mark.parametrize('fecha', ['2026-02-31', '2026-13-01', 'cualquier-cosa'])
+    def test_al_publicar_la_semana(self, staff_client, fecha):
+        res = staff_client.post(PUBLISH_WEEK_URL, {'start_date': fecha}, format='json')
+
+        assert res.status_code == status.HTTP_400_BAD_REQUEST, res.status_code

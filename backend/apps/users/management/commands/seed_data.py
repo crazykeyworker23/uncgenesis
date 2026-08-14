@@ -7,7 +7,7 @@ from apps.roles.models import Role, UserRole, RoleType
 from apps.cells.models import CellGroup, MeetingDay, CellStatus
 from apps.devotionals.models import Devotional, DevotionalStatus
 from apps.events.models import Event, EventStatus
-from apps.publications.models import Publication, PublicationCategory, PublicationTag, PublicationStatus, PublicationContentType
+from apps.publications.models import Publication, PublicationCategory, PublicationStatus, PublicationContentType
 
 User = get_user_model()
 

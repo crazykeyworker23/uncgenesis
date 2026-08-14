@@ -295,6 +295,20 @@ class DevotionalViewSet(viewsets.ModelViewSet):
     # Cargar la semana día por día eran siete formularios largos. Aquí se
     # entra el lunes y los siete pasajes de una vez.
 
+    @staticmethod
+    def _monday(value):
+        """
+        Lee la fecha que abre la semana. Devuelve None si no se entiende.
+
+        `parse_date` devuelve None ante un texto cualquiera, pero lanza
+        ValueError si la fecha está bien escrita y no existe —un 31 de
+        febrero—, y eso rompía la petición entera.
+        """
+        try:
+            return parse_date(value or '')
+        except ValueError:
+            return None
+
     @extend_schema(request=WeeklyPlanSerializer, responses={200: DevotionalSerializer(many=True)})
     @action(detail=False, methods=['get', 'post'], url_path='weekly-plan')
     def weekly_plan(self, request):
@@ -310,7 +324,7 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         recibió seria peor que avisar.
         """
         if request.method == 'GET':
-            start = parse_date(request.query_params.get('start_date') or '')
+            start = self._monday(request.query_params.get('start_date'))
             if start is None:
                 return Response(
                     {'error': 'Indica el lunes de la semana en start_date (2026-08-10).'},
@@ -371,7 +385,7 @@ class DevotionalViewSet(viewsets.ModelViewSet):
         Cada día queda con su notificación a las 7:00 de esa mañana, que es lo
         que ya hacía un devocional suelto al publicarse.
         """
-        start = parse_date(request.data.get('start_date') or '')
+        start = self._monday(request.data.get('start_date'))
         if start is None:
             return Response(
                 {'error': 'Indica el lunes de la semana en start_date (2026-08-10).'},

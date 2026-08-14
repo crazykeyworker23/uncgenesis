@@ -78,6 +78,33 @@ class TestReportsAndAnalytics:
         content = res.content.decode('utf-8')
         assert 'Tipo,ID,Nombre Solicitante' in content
 
+    def test_export_requests_csv_con_datos(self, admin_client):
+        """
+        La exportación se probaba con la base vacía.
+
+        Los bucles que arman las filas no llegaban a ejecutarse, así que un
+        campo mal escrito pasaba desapercibido: la visita guarda el nombre en
+        `full_name` y se leía `visitor_name`, y la descarga reventaba en
+        cuanto había una sola visita registrada.
+        """
+        from apps.church_requests.models import PrayerRequest, VisitorRequest
+
+        PrayerRequest.objects.create(
+            requester_name='Ana Quispe',
+            requester_phone='999111222',
+            subject='Por mi familia',
+            description='Oren por nosotros.',
+        )
+        VisitorRequest.objects.create(full_name='Luis Ramos', phone='999333444')
+
+        res = admin_client.get(f"{REPORTS_EXPORT}?type=requests")
+
+        assert res.status_code == status.HTTP_200_OK
+        content = res.content.decode('utf-8')
+        assert 'Ana Quispe' in content
+        assert 'Luis Ramos' in content
+        assert '999333444' in content
+
     def test_export_users_csv(self, admin_client):
         """Admins can export user directories as CSV."""
         res = admin_client.get(f"{REPORTS_EXPORT}?type=users")

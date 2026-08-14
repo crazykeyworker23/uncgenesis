@@ -135,8 +135,10 @@ class ReportsExportAPIView(APIView):
                 writer.writerow([
                     'Visita',
                     v.id,
-                    v.visitor_name,
-                    v.visitor_phone,
+                    # La visita guarda el nombre en `full_name`, no en
+                    # `visitor_name` como la petición de oración.
+                    v.full_name,
+                    v.phone,
                     v.status,
                     v.assigned_to.full_name if v.assigned_to else 'Sin asignar',
                     v.created_at.strftime('%Y-%m-%d %H:%M') if v.created_at else ''

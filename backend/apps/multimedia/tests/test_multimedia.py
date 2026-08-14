@@ -4,7 +4,6 @@ from rest_framework import status
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
 from apps.multimedia.models import Multimedia, MediaType
-from apps.roles.models import Role, RoleType, UserRole, Permission
 
 User = get_user_model()
 

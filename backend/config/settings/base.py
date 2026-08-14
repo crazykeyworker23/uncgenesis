@@ -133,6 +133,16 @@ CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[
     'http://72.61.48.152:8080',
 ])
 
+# Dirección del panel, para los enlaces que se mandan por correo.
+#
+# Se tomaba el primer origen de CORS, que es otra cosa: esa lista dice quién
+# puede llamar a la API, no a dónde mandar a la persona. Si además quedaba
+# vacía, el enlace de recuperar contraseña rompía la petición.
+FRONTEND_URL = env(
+    'FRONTEND_URL',
+    default=(CORS_ALLOWED_ORIGINS[0] if CORS_ALLOWED_ORIGINS else 'http://localhost'),
+).rstrip('/')
+
 # Django REST Framework Config
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

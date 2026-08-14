@@ -123,11 +123,7 @@ class CellGroupViewSet(CellManagementMixin, viewsets.ModelViewSet):
         notificaciones porque no puede difundir a la iglesia: el destino queda
         acotado a su propia célula y a la cadena por encima de ella.
         """
-        from apps.notifications.models import (
-            Notification,
-            NotificationStatus,
-            TargetAudience,
-        )
+        from apps.notifications.models import Notification, NotificationStatus
         from apps.notifications.tasks import send_push_notification_task
 
         cell = self.get_object()
